@@ -12,7 +12,7 @@ Before opening a pull request, run the complete local verification sequence:
 
 ```text
 uv sync --locked
-uv run pytest --cov --cov-report=xml
+uv run pytest --cov --cov-branch --cov-report=xml
 uv run ruff format --check .
 uv run ruff check .
 uv run ty check

@@ -234,7 +234,7 @@ def test_ci_runs_every_required_quality_command() -> None:
     runs = {step["run"] for step in steps if "run" in step}
 
     assert "uv sync --locked" in runs
-    assert "uv run pytest --cov --cov-report=xml" in runs
+    assert "uv run pytest --cov --cov-branch --cov-report=xml" in runs
     assert "uv run ruff format --check ." in runs
     assert "uv run ruff check ." in runs
     assert "uv run ty check" in runs
@@ -418,7 +418,7 @@ Expected: exit 0 with no lockfile changes.
 
 - [ ] **Step 2: Verify tests and Codecov XML generation**
 
-Run: `uv run pytest --cov --cov-report=xml`
+Run: `uv run pytest --cov --cov-branch --cov-report=xml`
 
 Expected: all tests pass, coverage meets the configured threshold, and `coverage.xml` is generated.
 
