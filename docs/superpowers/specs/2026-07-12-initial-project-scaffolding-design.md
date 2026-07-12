@@ -18,7 +18,8 @@ the eventual plug-in API.
 Repository-level files provide:
 
 - `pyproject.toml` for Python 3.14+, uv packaging, development dependencies,
-  pytest and coverage settings, Ruff formatting/linting, and ty type checking.
+  pytest and coverage settings, Ruff formatting/linting, ty type checking, and
+  PyYAML for test-only configuration parsing.
 - `uv.lock` for reproducible dependency resolution.
 - `.gitignore`, Apache-2.0 `LICENSE`, `README.md`, and `CONTRIBUTING.md` for a
   usable contributor experience.
@@ -42,9 +43,10 @@ uv run ruff check .
 uv run ty check
 ```
 
-CI must fail if dependency synchronization, tests, formatting, linting, or
-type checking fails. Codecov upload follows successful test execution and uses
-the generated `coverage.xml` report.
+CI pins the uv setup action, explicitly requests Python 3.14 through uv, and
+must fail if dependency synchronization, tests, formatting, linting, or type
+checking fails. Codecov upload follows successful test execution and uses the
+generated `coverage.xml` report.
 
 ## Versioning and Releases
 
@@ -59,15 +61,24 @@ the scaffold workflow beyond Release Please's standard GitHub release process.
 Follow test-first development for the only runtime behavior in this scaffold:
 package import and version exposure. Add the smoke test first, confirm it fails
 because the package does not exist, then add the minimal package implementation
-and confirm it passes. Configuration and workflow files are validated through
-their corresponding local tools and by inspecting their exact commands.
+and confirm it passes. Tests parse TOML with `tomllib`, JSON with `json`, and
+YAML with PyYAML. They also assert that CI contains the five required commands
+and explicit Python/uv setup, and that the supporting GitHub configuration has
+the expected top-level structure.
 
 The final verification gate runs all five documented commands from a clean
-dependency state and reviews the complete Git diff for accidental scope creep.
+dependency state, runs the configuration-validation tests as part of pytest,
+and reviews the complete Git diff for accidental scope creep. A successful
+GitHub Actions run is a post-push review requirement and must be reported as
+pending when the branch has not been pushed; it is not represented as local
+verification.
 
 ## Constraints
 
-- Minimum supported Python version is exactly 3.14.
+- Minimum supported Python version is exactly 3.14. This is an accepted product
+  constraint. Before implementing GIMP integration on the next branch, confirm
+  that the target GIMP 3 distribution can host or invoke Python 3.14; revise the
+  product constraint explicitly if it cannot.
 - Use uv for project and dependency management.
 - Use pytest and pytest-cov; produce `coverage.xml` for Codecov.
 - Use Ruff for formatting and linting and ty for static type checking.
