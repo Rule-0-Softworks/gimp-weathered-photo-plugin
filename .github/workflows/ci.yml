@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          python-version: 3.12
+      - name: Sync locked dependencies
+        run: uv sync --locked
+      - name: Run tests with coverage
+        run: uv run pytest --cov --cov-report=xml
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run ty check
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          files: coverage.xml
+          fail_ci_if_error: true
