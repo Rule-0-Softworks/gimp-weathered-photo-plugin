@@ -140,9 +140,12 @@ Run: `uv lock --python 3.12`
 
 Expected: exit 0 and a new `uv.lock` compatible with Python 3.12+.
 
-Run: `uv sync --locked`
+Run: `uv sync --locked --no-install-project`
 
-Expected: exit 0 with the project and development group installed.
+Expected: exit 0 with the Python 3.12 environment and development group installed.
+The package is intentionally absent until Step 4, so `--no-install-project`
+is required here. The full `uv sync --locked` verification remains in Task 4
+after the package implementation exists.
 
 - [ ] **Step 3: Run the smoke test and verify RED**
 
@@ -160,13 +163,21 @@ from importlib.metadata import version
 __version__ = version("gimp-weathered-photo-plugin")
 ```
 
-- [ ] **Step 5: Run the smoke test and verify GREEN**
+- [ ] **Step 5: Install the newly created project into the locked environment**
+
+Run: `uv sync --locked`
+
+Expected: exit 0 with the project and development group installed. This is
+required because Step 2 intentionally used `--no-install-project` while the
+package did not yet exist.
+
+- [ ] **Step 6: Run the smoke test and verify GREEN**
 
 Run: `uv run pytest tests/test_package.py -v`
 
 Expected: `1 passed`.
 
-- [ ] **Step 6: Commit the package foundation**
+- [ ] **Step 7: Commit the package foundation**
 
 ```powershell
 git add .python-version pyproject.toml uv.lock src tests/test_package.py
