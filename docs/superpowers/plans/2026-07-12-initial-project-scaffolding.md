@@ -448,9 +448,11 @@ Run: `git diff --stat origin/main...HEAD`
 
 Expected: only scaffold, tests, automation, documentation, and planning files.
 
-Run: `git grep -n -i -E '(^|[^a-z])(gimp|gegl|image treatment|image-processing)' -- src tests`
+Run: `git grep -n -i -E '(import gi([^a-z_]|$)|from gi([^a-z_]|$)|gi\.repository|gimp\.|gegl|image treatment|image-processing)' -- src tests`
 
-Expected: no implementation references; descriptive project names in package metadata are acceptable outside runtime/test logic.
+Expected: no GIMP binding, GEGL, or image-treatment implementation references.
+The package and distribution identifiers necessarily include `gimp`, so this
+check excludes those identifiers and searches for integration indicators.
 
 - [ ] **Step 6: Confirm branch and working-tree status**
 
