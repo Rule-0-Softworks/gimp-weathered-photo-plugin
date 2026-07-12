@@ -35,11 +35,14 @@ def test_ci_pins_python_and_uploads_coverage() -> None:
     workflow = load_yaml(".github/workflows/ci.yml")
     steps = workflow["jobs"]["quality"]["steps"]
 
-    assert any(step.get("with", {}).get("python-version") == 3.12 for step in steps)
-    assert any(
-        str(step.get("uses", "")).startswith("codecov/codecov-action@")
+    codecov_step = next(
+        step
         for step in steps
+        if str(step.get("uses", "")).startswith("codecov/codecov-action@")
     )
+
+    assert any(step.get("with", {}).get("python-version") == 3.12 for step in steps)
+    assert codecov_step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
 
 
 def test_workflows_pin_actions_to_latest_commit_shas() -> None:
@@ -84,6 +87,7 @@ def test_supporting_yaml_configuration_has_expected_structure() -> None:
     assert ecosystems == {"github-actions", "uv"}
     assert {"project", "patch"} <= set(codecov["coverage"]["status"])
     assert "release-please" in release["jobs"]
+    assert release["permissions"]["issues"] == "write"
 
 
 def test_release_please_json_uses_python_manifest_mode() -> None:
