@@ -19,7 +19,7 @@ jobs:
       - name: Sync locked dependencies
         run: uv sync --locked
       - name: Run tests with coverage
-        run: uv run pytest --cov --cov-report=xml
+        run: uv run pytest --cov --cov-branch --cov-report=xml
       - name: Check formatting
         run: uv run ruff format --check .
       - name: Lint
