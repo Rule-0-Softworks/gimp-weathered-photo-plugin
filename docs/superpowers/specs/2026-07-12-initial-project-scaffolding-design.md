@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Create a reproducible, CI-enforced Python 3.14+ project foundation for the
+Create a reproducible, CI-enforced Python 3.12+ project foundation for the
 weathered-photo GIMP plug-in. This branch establishes packaging, quality,
 security, dependency-update, coverage, and release infrastructure only. It
 must not contain GIMP integration or image-treatment behavior.
@@ -17,7 +17,7 @@ the eventual plug-in API.
 
 Repository-level files provide:
 
-- `pyproject.toml` for Python 3.14+, uv packaging, development dependencies,
+- `pyproject.toml` for Python 3.12+, uv packaging, development dependencies,
   pytest and coverage settings, Ruff formatting/linting, ty type checking, and
   PyYAML for test-only configuration parsing.
 - `uv.lock` for reproducible dependency resolution.
@@ -43,7 +43,7 @@ uv run ruff check .
 uv run ty check
 ```
 
-CI pins the uv setup action, explicitly requests Python 3.14 through uv, and
+CI pins the uv setup action, explicitly requests Python 3.12 through uv, and
 must fail if dependency synchronization, tests, formatting, linting, or type
 checking fails. Codecov upload follows successful test execution and uses the
 generated `coverage.xml` report.
@@ -75,10 +75,10 @@ verification.
 
 ## Constraints
 
-- Minimum supported Python version is exactly 3.14. This is an accepted product
-  constraint. Before implementing GIMP integration on the next branch, confirm
-  that the target GIMP 3 distribution can host or invoke Python 3.14; revise the
-  product constraint explicitly if it cannot.
+- Minimum supported Python version is 3.12 (`requires-python = ">=3.12"`).
+  Python 3.12 is also the canonical local and CI runtime so development matches
+  the likely GIMP 3 host interpreter. Newer compatible Python versions remain
+  allowed but are not the primary scaffold target.
 - Use uv for project and dependency management.
 - Use pytest and pytest-cov; produce `coverage.xml` for Codecov.
 - Use Ruff for formatting and linting and ty for static type checking.
