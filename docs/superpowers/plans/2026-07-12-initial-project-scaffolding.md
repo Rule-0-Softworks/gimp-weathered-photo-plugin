@@ -277,7 +277,7 @@ Expected: failures with `FileNotFoundError` for the absent workflow/configuratio
 
 - [ ] **Step 3: Add CI and Codecov configuration**
 
-Create `.github/workflows/ci.yml` with pull-request and push triggers, read-only contents permission, `actions/checkout@v6`, pinned `astral-sh/setup-uv` v8.1.0 commit SHA, Python 3.12, and separate failing steps for the five exact commands asserted above. Add `codecov/codecov-action@v6` after tests with `files: coverage.xml` and `fail_ci_if_error: true`.
+Create `.github/workflows/ci.yml` with pull-request and push triggers, read-only contents permission, and SHA-pinned latest releases of `actions/checkout`, `astral-sh/setup-uv`, and `codecov/codecov-action`, each with a readable version comment. Use Python 3.12 and separate failing steps for the five exact commands asserted above. Add Codecov after tests with `files: coverage.xml` and `fail_ci_if_error: true`.
 
 Create `.codecov.yml`:
 
@@ -294,11 +294,11 @@ coverage:
 
 - [ ] **Step 4: Add CodeQL, Dependabot, and Release Please configuration**
 
-Create `.github/workflows/codeql.yml` using `github/codeql-action/init@v4` and `github/codeql-action/analyze@v4` for `languages: python`, triggered by pushes and pull requests to `main` plus a weekly schedule, with `security-events: write` and `contents: read` permissions.
+Create `.github/workflows/codeql.yml` using SHA-pinned latest releases of `github/codeql-action/init` and `github/codeql-action/analyze`, each with a readable version comment, for `languages: python`, triggered by pushes and pull requests to `main` plus a weekly schedule, with `security-events: write` and `contents: read` permissions.
 
 Create `.github/dependabot.yml` with version 2 and weekly updates for both `github-actions` at `/` and `uv` at `/`, each limited to five open pull requests and using the `dependencies` Conventional Commit prefix.
 
-Create `.github/workflows/release-please.yml` triggered by pushes to `main`, with `contents: write` and `pull-requests: write`, invoking `googleapis/release-please-action@v5` with the repository token and the two root JSON configuration paths.
+Create `.github/workflows/release-please.yml` triggered by pushes to `main`, with `contents: write` and `pull-requests: write`, invoking the SHA-pinned latest `googleapis/release-please-action` release with a readable version comment, the repository token, and the two root JSON configuration paths.
 
 Create `release-please-config.json`:
 

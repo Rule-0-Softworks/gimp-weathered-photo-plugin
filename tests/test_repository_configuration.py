@@ -42,6 +42,37 @@ def test_ci_pins_python_and_uploads_coverage() -> None:
     )
 
 
+def test_workflows_pin_actions_to_latest_commit_shas() -> None:
+    workflows = {
+        "ci": load_yaml(".github/workflows/ci.yml"),
+        "codeql": load_yaml(".github/workflows/codeql.yml"),
+        "release_please": load_yaml(".github/workflows/release-please.yml"),
+    }
+    uses = {
+        workflow_name: [
+            step["uses"]
+            for job in workflow["jobs"].values()
+            for step in job["steps"]
+            if "uses" in step
+        ]
+        for workflow_name, workflow in workflows.items()
+    }
+
+    assert uses["ci"] == [
+        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+        "astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990",
+        "codecov/codecov-action@8cad3ba95e5920c42f44492e54bc9639cba47959",
+    ]
+    assert uses["codeql"] == [
+        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
+        "github/codeql-action/init@24ea975727876cf496b1eb0c5b36e96e01600b51",
+        "github/codeql-action/analyze@24ea975727876cf496b1eb0c5b36e96e01600b51",
+    ]
+    assert uses["release_please"] == [
+        "googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7"
+    ]
+
+
 def test_supporting_yaml_configuration_has_expected_structure() -> None:
     codeql = load_yaml(".github/workflows/codeql.yml")
     dependabot = load_yaml(".github/dependabot.yml")
