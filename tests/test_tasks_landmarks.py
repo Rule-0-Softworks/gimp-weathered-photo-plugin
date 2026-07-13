@@ -87,8 +87,9 @@ def test_provider_maps_tasks_landmarks_to_normalized_points() -> None:
         assert provider.detect_hands(image)[0][0].x == 0.6
 
 
-def test_provider_converts_bgra_to_three_channel_rgb_before_creating_tasks_image(
-) -> None:
+def test_provider_converts_bgra_to_three_channel_rgb_before_creating_tasks_image() -> (
+    None
+):
     received: list[np.ndarray] = []
     provider = MediaPipeTasksLandmarkProvider(
         _models(),
@@ -105,8 +106,9 @@ def test_provider_converts_bgra_to_three_channel_rgb_before_creating_tasks_image
     assert received[0][0, 0].tolist() == [30, 20, 10]
 
 
-def test_provider_converts_bgr_to_three_channel_rgb_before_creating_tasks_image(
-) -> None:
+def test_provider_converts_bgr_to_three_channel_rgb_before_creating_tasks_image() -> (
+    None
+):
     received: list[np.ndarray] = []
     provider = MediaPipeTasksLandmarkProvider(
         _models(),
@@ -190,8 +192,11 @@ def test_provider_rejects_invalid_images_before_importing_opencv(monkeypatch) ->
     )
 
     monkeypatch.setitem(sys.modules, "cv2", None)
-    with provider, pytest.raises(
-        ValueError, match="MediaPipe Tasks requires a three- or four-channel image"
+    with (
+        provider,
+        pytest.raises(
+            ValueError, match="MediaPipe Tasks requires a three- or four-channel image"
+        ),
     ):
         provider.detect_faces(np.zeros((3, 3), dtype=np.uint8))
 
@@ -204,9 +209,7 @@ def test_provider_rejects_detection_when_inactive() -> None:
         image_factory=lambda value: value,
     )
 
-    with pytest.raises(
-        RuntimeError, match=r"^MediaPipe Tasks provider is not active$"
-    ):
+    with pytest.raises(RuntimeError, match=r"^MediaPipe Tasks provider is not active$"):
         provider.detect_faces(np.zeros((3, 3, 3), dtype=np.uint8))
 
 

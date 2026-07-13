@@ -13,7 +13,12 @@ from gimp_weathered_photo_plugin.model_assets import (
 )
 
 
-def _write_assets(tmp_path: Path, *, severity: str | None = None) -> Path:
+def _write_assets(
+    tmp_path: Path,
+    *,
+    severity: str | None = None,
+    advisory_model_id: str = "face-landmarker",
+) -> Path:
     models = tmp_path / "models"
     models.mkdir()
     face = models / "face_landmarker.task"
@@ -50,7 +55,7 @@ def _write_assets(tmp_path: Path, *, severity: str | None = None) -> Path:
     if severity is not None:
         advisories["advisories"].append(
             {
-                "model_id": "face-landmarker",
+                "model_id": advisory_model_id,
                 "affected_version": "pinned-face",
                 "severity": severity,
                 "reference": "CVE-2026-0001",
@@ -99,3 +104,14 @@ def test_low_advisory_warns_but_allows_fresh_analysis(tmp_path: Path) -> None:
     resolver = ModelResolver(_write_assets(tmp_path, severity="low"))
     with pytest.warns(UserWarning, match="CVE-2026-0001"), resolver.resolve() as models:
         assert models.paths["hand-landmarker"].is_file()
+
+
+def test_resolver_rejects_advisory_for_an_unknown_model_id(tmp_path: Path) -> None:
+    assets = _write_assets(
+        tmp_path,
+        severity="critical",
+        advisory_model_id="face-landmarkre",
+    )
+
+    with pytest.raises(ModelAssetError, match="face-landmarkre"):
+        ModelResolver(assets).resolve().__enter__()

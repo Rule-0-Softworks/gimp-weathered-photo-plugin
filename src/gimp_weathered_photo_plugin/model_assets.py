@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import cast
 
 _EXPECTED_MODEL_IDS = frozenset({"face-landmarker", "hand-landmarker"})
 _BLOCKING_SEVERITIES = frozenset({"medium", "high", "critical"})
@@ -101,8 +102,7 @@ def _resolve_manifest_models(root: Path, manifest: object) -> dict[str, Resolved
 
     models: dict[str, ResolvedModel] = {}
     for entry in entries:
-        if not isinstance(entry, dict):
-            raise ModelAssetError("Model manifest entries must be objects")
+        entry = _require_object(entry, "Model manifest entry")
         model_id = _required_string(entry, "id", "model manifest entry")
         if model_id not in _EXPECTED_MODEL_IDS:
             raise ModelAssetError(f"Unknown model manifest entry: {model_id}")
@@ -153,6 +153,12 @@ def _required_string(entry: dict[str, object], key: str, context: str) -> str:
     return value
 
 
+def _require_object(value: object, context: str) -> dict[str, object]:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise ModelAssetError(f"{context} must be an object")
+    return cast(dict[str, object], value)
+
+
 def _contained_path(root: Path, relative_path: str, model_id: str) -> Path:
     candidate = root / relative_path
     try:
@@ -175,8 +181,7 @@ def _evaluate_advisories(
         raise ModelAssetError("Model advisories must contain an advisories list")
 
     for advisory in advisories:
-        if not isinstance(advisory, dict):
-            raise ModelAssetError("Model advisory entries must be objects")
+        advisory = _require_object(advisory, "Model advisory entry")
         model_id = _required_string(advisory, "model_id", "model advisory")
         affected_version = _required_string(
             advisory, "affected_version", "model advisory"
@@ -187,7 +192,9 @@ def _evaluate_advisories(
             advisory, "suggested_replacement", "model advisory"
         )
         model = models.get(model_id)
-        if model is None or model.version != affected_version:
+        if model is None:
+            raise ModelAssetError(f"Unknown model advisory ID: {model_id}")
+        if model.version != affected_version:
             continue
         message = (
             f"Model {model_id} version {affected_version} advisory {reference}: "
