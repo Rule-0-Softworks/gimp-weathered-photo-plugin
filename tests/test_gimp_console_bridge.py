@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -94,6 +95,46 @@ def test_console_bridge_cleans_a_per_run_configuration_under_project_temp(
     GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe")).render(
         source, png, xcf, make_recipe(), _assets(tmp_path)
     )
+
+    assert captured[0].parent == root
+    assert not captured[0].exists()
+
+
+@pytest.mark.parametrize("failure", ["nonzero", "timeout"])
+def test_console_bridge_cleans_temporary_configuration_after_a_failed_job(
+    tmp_path: Path, monkeypatch, failure: str
+) -> None:
+    import gimp_weathered_photo_plugin.gimp_console_bridge as bridge_module
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"source")
+    root = tmp_path / "project-temp"
+    captured: list[Path] = []
+
+    def fake_run(command: list[str], **_: object) -> CompletedProcess[str]:
+        configuration = Path(
+            next(
+                item.split("=", 1)[1]
+                for item in command
+                if item.startswith("--gimprc=")
+            )
+        ).parent
+        captured.append(configuration)
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(command, 120)
+        return CompletedProcess(command, 1, "", "failed")
+
+    monkeypatch.setattr(bridge_module, "_TEMP_ROOT", root)
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    with pytest.raises(GimpConsoleError):
+        GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe")).render(
+            source,
+            tmp_path / "result.png",
+            tmp_path / "result.xcf",
+            make_recipe(),
+            _assets(tmp_path),
+        )
 
     assert captured[0].parent == root
     assert not captured[0].exists()

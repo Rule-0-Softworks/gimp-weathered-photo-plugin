@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from importlib import import_module
@@ -180,9 +181,11 @@ class _NativeGimpOperations:
     def apply_local_blur(self, mark: Mark, asset: Path) -> None:
         blurred_source = self._source.copy()
         blurred_source.set_name(f"Water stain blur: {asset.stem}")
+        blurred_source.set_opacity(mark.opacity * 100.0)
         self._image.insert_layer(blurred_source, None, 0)
-        mask = self._add_source_alpha_mask(blurred_source)
-        self._apply_water_stain_asset(mask, asset)
+        mask = self._add_black_mask(blurred_source)
+        self._apply_water_stain_asset(mask, mark, asset)
+        self._clip_mask_to_source_alpha(mask)
         self._apply_exclusions(mask)
         blur = self._gimp.DrawableFilter.new(blurred_source, "gegl:gaussian-blur", None)
         config = blur.get_config()
@@ -215,6 +218,11 @@ class _NativeGimpOperations:
             return mask
         finally:
             self._gimp.Selection.none(self._image)
+
+    def _add_black_mask(self, layer: Any) -> Any:
+        mask = layer.create_mask(self._gimp.AddMaskType.BLACK)
+        layer.add_mask(mask)
+        return mask
 
     def _paint_with_brush(self, layer: Any, mark: Mark, asset: Path) -> None:
         brush = self._gimp.Brush.get_by_name(asset.stem)
@@ -267,41 +275,55 @@ class _NativeGimpOperations:
         finally:
             self._gimp.context_pop()
 
-    def _apply_organic_mask(self, mask: Any, mark: Mark, asset: Path) -> None:
-        # Masks remain editable.  A named native brush is used for brush marks;
-        # water-stain image assets are represented by the corresponding local mask.
-        if mark.family == "water_stain":
-            self._gimp.context_push()
-            try:
-                self._gimp.context_set_foreground(self._gegl.Color.new("white"))
-                self._gimp.context_set_opacity(mark.density * 100.0)
-                self._gimp.pencil(
-                    mask,
-                    [
-                        mark.anchor.x * self._image.get_width(),
-                        mark.anchor.y * self._image.get_height(),
-                    ],
-                )
-            finally:
-                self._gimp.context_pop()
-
-    def _apply_water_stain_asset(self, mask: Any, asset: Path) -> None:
+    def _apply_water_stain_asset(self, mask: Any, mark: Mark, asset: Path) -> None:
         asset_image = self._gimp.file_load(
             self._gimp.RunMode.NONINTERACTIVE,
             self._gio.File.new_for_path(str(asset)),
         )
         try:
             asset_layers = asset_image.get_layers()
-            if not asset_layers or not self._gimp.edit_copy([asset_layers[0]]):
+            if not asset_layers:
+                raise RuntimeError(f"GIMP could not load water-stain mask {asset.stem}")
+            asset_layer = asset_layers[0]
+            target_size = (
+                min(self._image.get_width(), self._image.get_height()) * mark.scale
+            )
+            asset_extent = max(asset_layer.get_width(), asset_layer.get_height())
+            scale = target_size / asset_extent
+            asset_layer.transform_2d(
+                asset_layer.get_width() / 2.0,
+                asset_layer.get_height() / 2.0,
+                scale,
+                scale,
+                math.radians(mark.rotation_degrees),
+                mark.anchor.x * self._image.get_width(),
+                mark.anchor.y * self._image.get_height(),
+            )
+            if not self._gimp.edit_copy([asset_layer]):
                 raise RuntimeError(f"GIMP could not load water-stain mask {asset.stem}")
             pasted = self._gimp.edit_paste(mask, False)
             if not pasted:
                 raise RuntimeError(
                     f"GIMP could not paste water-stain mask {asset.stem}"
                 )
-            pasted[0].floating_sel_anchor()
+            if not pasted[0].set_opacity(mark.density * 100.0):
+                raise RuntimeError(
+                    f"GIMP could not set water-stain mask density {asset.stem}"
+                )
+            if not self._gimp.floating_sel_anchor(pasted[0]):
+                raise RuntimeError(
+                    f"GIMP could not anchor water-stain mask {asset.stem}"
+                )
         finally:
             asset_image.delete()
+
+    def _clip_mask_to_source_alpha(self, mask: Any) -> None:
+        self._image.select_item(self._gimp.ChannelOps.REPLACE, self._source)
+        try:
+            self._gimp.Selection.invert(self._image)
+            mask.edit_clear()
+        finally:
+            self._gimp.Selection.none(self._image)
 
     def _apply_exclusions(self, mask: Any) -> None:
         for exclusion in self._exclusions:
@@ -323,7 +345,7 @@ def main() -> None:
     """Register the real GIMP 3 procedures when this file is run by GIMP."""
 
     Gimp, GLib, GObject = _load_gimp_plugin_runtime()
-    _gimp, Gegl, Gio = _load_gimp()
+    _gimp, _Gegl, _Gio = _load_gimp()
 
     def run_interactive(
         procedure: Any,
@@ -333,35 +355,13 @@ def main() -> None:
         config: Any,
         data: Any,
     ) -> Any:
-        try:
-            validate_interactive_source(
-                Path(image.get_file().get_path())
-                if image.get_file() is not None
-                else None,
-                image.is_dirty(),
-            )
-            recipe, assets = parse_interactive_request(
-                config.get_property("recipe-json"),
-                config.get_property("asset-map-json"),
-            )
-            if (image.get_width(), image.get_height()) != (
-                recipe.source_size.width,
-                recipe.source_size.height,
-            ):
-                raise ValueError("interactive image dimensions do not match the recipe")
-            if not drawables:
-                raise ValueError("interactive image has no drawable")
-            apply_recipe(
-                _NativeGimpOperations(image, drawables[0], Gimp, Gegl, Gio),
-                recipe,
-                assets,
-            )
-        except Exception as error:
-            return procedure.new_return_values(
-                Gimp.PDBStatusType.EXECUTION_ERROR, GLib.Error(str(error))
-            )
-        del data, run_mode
-        return procedure.new_return_values(Gimp.PDBStatusType.SUCCESS, GLib.Error())
+        del run_mode, image, drawables, config, data
+        return procedure.new_return_values(
+            Gimp.PDBStatusType.CALLING_ERROR,
+            GLib.Error(
+                "interactive rendering is unavailable; use the batch console renderer"
+            ),
+        )
 
     def run_batch(
         procedure: Any, run_mode: Any, request_path: str, config: Any, data: Any
