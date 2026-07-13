@@ -1,5 +1,10 @@
 # Vezor Worn Print GIMP 3 Plug-in Implementation Plan
 
+> **Amendment plan:** Execute
+> `docs/superpowers/plans/2026-07-12-gimp-semantic-analysis-bridge.md` for the
+> semantic-analysis runtime boundary, replay, staging, and publication work.
+> It supersedes conflicting steps in this original plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver a GIMP 3-native, stochastic worn-print plug-in and batch workflow that preserves a source PNG's dimensions and ragged alpha silhouette while producing PNG, XCF, and recipe outputs.

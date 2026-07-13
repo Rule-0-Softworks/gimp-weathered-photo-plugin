@@ -208,6 +208,9 @@ tempCodeRunnerFile.py
 .ty/
 .codex/full-feature-tdd/
 
+# Local deferred-work notes
+/docs/tasks/
+
 # Editor and operating-system metadata
 .vscode/
 .idea/

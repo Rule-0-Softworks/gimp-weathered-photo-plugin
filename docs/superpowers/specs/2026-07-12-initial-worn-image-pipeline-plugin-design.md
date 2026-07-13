@@ -1,5 +1,11 @@
 # Vezor Worn Print GIMP 3 Plug-in Design
 
+> **Amendment:** Semantic analysis is implemented through the standard-CPython
+> bridge defined in
+> `docs/superpowers/specs/2026-07-12-gimp-semantic-analysis-bridge-design.md`.
+> That amendment supersedes this document's bundled-GIMP-Python MediaPipe/OpenCV
+> assumption and its replay/publication semantics where they conflict.
+
 ## Purpose
 
 Build a GIMP 3 plug-in and host-launched batch entry point that gives an
