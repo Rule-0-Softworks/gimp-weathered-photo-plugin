@@ -1,6 +1,7 @@
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -121,4 +122,40 @@ def test_bridge_rejects_timeout_and_mismatched_response_fingerprint(
         ),
     )
     with pytest.raises(BridgeExecutionError, match="fingerprint mismatch"):
+        bridge.analyze(request)
+
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 5, "", "detector analysis failed"
+        ),
+    )
+    with pytest.raises(BridgeExecutionError, match="detector analysis failed"):
+        bridge.analyze(request)
+
+
+def test_bridge_runs_the_real_analyzer_module_with_standard_cpython(
+    tmp_path: Path,
+) -> None:
+    from gimp_weathered_photo_plugin.semantic_bridge import (
+        BridgeExecutionError,
+        SemanticAnalysisBridge,
+    )
+
+    source = tmp_path / "missing.png"
+    request = AnalysisRequest(
+        1,
+        source.resolve(),
+        "a" * 64,
+        Size(2, 2),
+    )
+
+    bridge = SemanticAnalysisBridge(
+        Path(sys.executable),
+        arguments=("-m", "gimp_weathered_photo_plugin.analyzer"),
+    )
+    with pytest.raises(
+        BridgeExecutionError, match="exit code 4: source image is unreadable"
+    ):
         bridge.analyze(request)

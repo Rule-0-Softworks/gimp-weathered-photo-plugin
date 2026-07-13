@@ -46,18 +46,23 @@ def stage_input(source: Path, staging_root: Path) -> StagedInput:
 @dataclass(frozen=True, slots=True)
 class SemanticAnalysisBridge:
     executable: Path
+    arguments: tuple[str, ...] = ()
     timeout_seconds: int = _TIMEOUT_SECONDS
 
     def __post_init__(self) -> None:
         if not self.executable.is_absolute():
             raise BridgeExecutionError("analyzer executable must be an absolute path")
+        if any(
+            not isinstance(argument, str) or not argument for argument in self.arguments
+        ):
+            raise BridgeExecutionError("analyzer arguments must be non-empty strings")
         if self.timeout_seconds <= 0:
             raise BridgeExecutionError("analyzer timeout must be positive")
 
     def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
         try:
             completed = subprocess.run(
-                [str(self.executable)],
+                [str(self.executable), *self.arguments],
                 input=json.dumps(request.to_dict()),
                 text=True,
                 encoding="utf-8",
@@ -69,8 +74,11 @@ class SemanticAnalysisBridge:
         except subprocess.TimeoutExpired as error:
             raise BridgeExecutionError("semantic analyzer timed out") from error
         if completed.returncode != 0:
+            diagnostic = _truncate_diagnostic(completed.stderr)
+            suffix = f": {diagnostic}" if diagnostic else ""
             raise BridgeExecutionError(
-                f"semantic analyzer failed with exit code {completed.returncode}"
+                "semantic analyzer failed with exit code "
+                f"{completed.returncode}{suffix}"
             )
         try:
             response = parse_response_json(completed.stdout)
@@ -81,3 +89,7 @@ class SemanticAnalysisBridge:
         if response.source_sha256 != request.source_sha256:
             raise BridgeExecutionError("semantic analyzer fingerprint mismatch")
         return response
+
+
+def _truncate_diagnostic(value: str) -> str:
+    return value.encode("utf-8")[:8192].decode("utf-8", errors="ignore")

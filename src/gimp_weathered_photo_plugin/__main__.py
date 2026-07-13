@@ -45,14 +45,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         renderer = GimpConsoleBridge(Path(arguments.gimp_console))
         bridge = (
-            SemanticAnalysisBridge(analyzer_executable)
+            SemanticAnalysisBridge(
+                analyzer_executable,
+                arguments=("-m", "gimp_weathered_photo_plugin.analyzer"),
+            )
             if analyzer_executable is not None and replay_record is None
             else None
         )
         provenance = (
             AnalysisProvenance(
                 analyzer_version=arguments.analyzer_version,
-                adapter_configuration={"executable": str(analyzer_executable)},
+                adapter_configuration={
+                    "arguments": "-m gimp_weathered_photo_plugin.analyzer",
+                    "executable": str(analyzer_executable),
+                },
             )
             if bridge is not None
             else None

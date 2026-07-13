@@ -1,5 +1,9 @@
 import hashlib
+import io
+import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -95,3 +99,37 @@ def test_analyzer_rejects_a_source_that_changed_after_request_creation(
 
     with pytest.raises(AnalyzerError, match="source fingerprint mismatch"):
         analyze_request(request, FakeAdapter())
+
+
+def test_analyzer_module_rejects_non_utf8_input_with_exit_code_two() -> None:
+    completed = subprocess.run(
+        [sys.executable, "-m", "gimp_weathered_photo_plugin.analyzer"],
+        input=b"\xff",
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2
+    assert completed.stdout == b""
+    assert b"UTF-8" in completed.stderr
+
+
+def test_analyzer_module_writes_one_response_for_a_valid_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import gimp_weathered_photo_plugin.analyzer as analyzer
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"source")
+    payload = json.dumps(_request(source).to_dict()).encode("utf-8")
+    stdin = io.TextIOWrapper(io.BytesIO(payload), encoding="utf-8")
+    stdout = io.StringIO()
+
+    monkeypatch.setattr(analyzer, "MediaPipeOpenCvAdapter", FakeAdapter)
+    monkeypatch.setattr(analyzer.sys, "stdin", stdin)
+    monkeypatch.setattr(analyzer.sys, "stdout", stdout)
+
+    assert analyzer.main() == 0
+    response = json.loads(stdout.getvalue())
+    assert response["source_sha256"] == _request(source).source_sha256
+    assert response["detectors"]["saliency"] == "detected"
