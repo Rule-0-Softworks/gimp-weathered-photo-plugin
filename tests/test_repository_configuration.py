@@ -91,9 +91,12 @@ def test_supporting_yaml_configuration_has_expected_structure() -> None:
     assert release["permissions"]["issues"] == "write"
 
 
-def test_codecov_patch_target_is_75_percent() -> None:
+def test_codecov_coverage_status_policy_allows_small_project_regressions() -> None:
     codecov = load_yaml(".codecov.yml")
 
+    project = codecov["coverage"]["status"]["project"]["default"]
+    assert project["target"] == "auto"
+    assert project["threshold"] == "0.5%"
     assert codecov["coverage"]["status"]["patch"]["default"]["target"] == "75%"
 
 
