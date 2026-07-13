@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -115,3 +116,14 @@ def test_resolver_rejects_advisory_for_an_unknown_model_id(tmp_path: Path) -> No
 
     with pytest.raises(ModelAssetError, match="face-landmarkre"):
         ModelResolver(assets).resolve().__enter__()
+
+
+def test_resolver_returns_immutable_mappings(tmp_path: Path) -> None:
+    with ModelResolver(_write_assets(tmp_path)).resolve() as models:
+        paths = cast(dict[str, Path], models.paths)
+        configuration = cast(dict[str, str], models.adapter_configuration)
+
+        with pytest.raises(TypeError):
+            paths["face-landmarker"] = Path("replacement.task")
+        with pytest.raises(TypeError):
+            configuration["advisories.schema_version"] = "2"

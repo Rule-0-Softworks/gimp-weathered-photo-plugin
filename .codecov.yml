@@ -5,4 +5,4 @@ coverage:
         target: auto
     patch:
       default:
-        target75%
+        target: 75%

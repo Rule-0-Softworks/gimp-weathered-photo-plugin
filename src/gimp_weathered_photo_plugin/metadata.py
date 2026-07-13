@@ -65,6 +65,17 @@ class RenderRecord:
         if self.bridge_schema_version >= 2:
             if not _MODEL_PROVENANCE_KEYS.issubset(self.adapter_configuration):
                 raise ValueError("adapter configuration is missing model provenance")
+            if not all(
+                self.adapter_configuration[key]
+                for key in {
+                    "advisories.schema_version",
+                    "model.face-landmarker.version",
+                    "model.hand-landmarker.version",
+                }
+            ):
+                raise ValueError(
+                    "adapter configuration has incomplete model provenance"
+                )
             _validate_sha256(self.adapter_configuration["model.face-landmarker.sha256"])
             _validate_sha256(self.adapter_configuration["model.hand-landmarker.sha256"])
 

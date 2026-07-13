@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 from typing import cast
 
 _EXPECTED_MODEL_IDS = frozenset({"face-landmarker", "hand-landmarker"})
@@ -77,7 +78,10 @@ class ModelResolver:
             model = models[model_id]
             configuration[f"model.{model_id}.sha256"] = model.sha256
             configuration[f"model.{model_id}.version"] = model.version
-        return ResolvedModels(paths=paths, adapter_configuration=configuration)
+        return ResolvedModels(
+            paths=MappingProxyType(paths),
+            adapter_configuration=MappingProxyType(configuration),
+        )
 
 
 def _load_json(path: Path, name: str) -> object:

@@ -110,3 +110,37 @@ def test_load_render_record_rejects_incomplete_schema_v2_model_provenance(
         ValueError, match="recipe sidecar must contain a complete render record"
     ):
         load_render_record(path)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "advisories.schema_version",
+        "model.face-landmarker.version",
+        "model.hand-landmarker.version",
+    ],
+)
+def test_render_record_rejects_empty_schema_v2_model_provenance(
+    field_name: str,
+) -> None:
+    recipe = replace(make_recipe(), source_size=Size(width=10, height=20))
+    adapter_configuration = _adapter_configuration()
+    adapter_configuration[field_name] = ""
+
+    with pytest.raises(ValueError, match="model provenance"):
+        RenderRecord(
+            recipe=recipe,
+            source_sha256="a" * 64,
+            source_size=Size(width=10, height=20),
+            asset_sha256={"dry-rub-neutral-gray": "b" * 64},
+            bridge_schema_version=2,
+            recipe_schema_version=1,
+            analyzer_version="1.2.3",
+            adapter_configuration=adapter_configuration,
+            detectors={
+                "face": "no_detection",
+                "hand": "no_detection",
+                "saliency": "detected",
+            },
+            exclusions=recipe.exclusions,
+        )

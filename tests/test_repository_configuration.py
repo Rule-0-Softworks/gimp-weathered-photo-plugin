@@ -90,6 +90,12 @@ def test_supporting_yaml_configuration_has_expected_structure() -> None:
     assert release["permissions"]["issues"] == "write"
 
 
+def test_codecov_patch_target_is_75_percent() -> None:
+    codecov = load_yaml(".codecov.yml")
+
+    assert codecov["coverage"]["status"]["patch"]["default"]["target"] == "75%"
+
+
 def test_release_please_json_uses_python_manifest_mode() -> None:
     config = load_json("release-please-config.json")
     manifest = load_json(".release-please-manifest.json")
