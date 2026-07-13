@@ -78,3 +78,12 @@ def _output_paths(source: Path, output_dir: Path) -> tuple[Path, Path, Path]:
         stem.with_suffix(".xcf"),
         stem.with_suffix(".recipe.json"),
     )
+
+
+def publish_output_set(
+    staged: tuple[Path, Path, Path], final: tuple[Path, Path, Path]
+) -> None:
+    if any(not path.is_file() for path in staged):
+        raise FileNotFoundError("staged output is missing")
+    for staged_path, final_path in zip(staged, final, strict=True):
+        staged_path.replace(final_path)
