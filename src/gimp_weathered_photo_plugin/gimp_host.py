@@ -171,7 +171,7 @@ class _NativeGimpOperations:
         self._paint_with_brush(layer, mark, asset)
         self._paint_mask_with_brush(mask, mark, asset)
         self._apply_exclusions(mask)
-        layer.transform_rotate(mark.rotation_degrees, True, 0.0, 0.0)
+        layer.transform_rotate(math.radians(mark.rotation_degrees), True, 0.0, 0.0)
         layer.set_mode(
             self._gimp.LayerMode.MULTIPLY
             if mark.family == "mottled_sepia"

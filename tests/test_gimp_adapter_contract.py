@@ -420,6 +420,98 @@ def test_native_layers_receive_a_source_alpha_mask_from_the_source_selection() -
     ]
 
 
+def test_native_brush_mark_converts_rotation_degrees_to_radians() -> None:
+    from gimp_weathered_photo_plugin.gimp_host import _NativeGimpOperations
+
+    calls: list[tuple[str, object]] = []
+
+    class Mask:
+        pass
+
+    class Layer:
+        def fill(self, _: object) -> None:
+            pass
+
+        def create_mask(self, _: object) -> Mask:
+            return Mask()
+
+        def add_mask(self, _: Mask) -> None:
+            pass
+
+        def transform_rotate(
+            self, angle: float, auto_center: bool, center_x: float, center_y: float
+        ) -> None:
+            calls.append(("rotate", (angle, auto_center, center_x, center_y)))
+
+        def set_mode(self, _: object) -> None:
+            pass
+
+    class Source:
+        def type_with_alpha(self) -> object:
+            return object()
+
+    class Image:
+        def get_width(self) -> int:
+            return 400
+
+        def get_height(self) -> int:
+            return 200
+
+        def insert_layer(self, *_: object) -> None:
+            pass
+
+        def select_item(self, *_: object) -> None:
+            pass
+
+    class Selection:
+        @staticmethod
+        def none(_: Image) -> None:
+            pass
+
+    class Brush:
+        @staticmethod
+        def get_by_name(_: str) -> object:
+            return object()
+
+    Gimp = type(
+        "Gimp",
+        (),
+        {
+            "Layer": type(
+                "LayerFactory", (), {"new": staticmethod(lambda *_: Layer())}
+            ),
+            "FillType": type("FillType", (), {"TRANSPARENT": "transparent"}),
+            "LayerMode": type(
+                "LayerMode", (), {"NORMAL": "normal", "MULTIPLY": "multiply"}
+            ),
+            "AddMaskType": type("AddMaskType", (), {"SELECTION": "selection"}),
+            "ChannelOps": type("ChannelOps", (), {"REPLACE": "replace"}),
+            "Selection": Selection,
+            "Brush": Brush,
+            "context_push": staticmethod(lambda: None),
+            "context_pop": staticmethod(lambda: None),
+            "context_set_brush": staticmethod(lambda _: None),
+            "context_set_brush_size": staticmethod(lambda _: None),
+            "context_set_brush_angle": staticmethod(lambda _: None),
+            "context_set_opacity": staticmethod(lambda _: None),
+            "context_set_foreground": staticmethod(lambda _: None),
+            "pencil": staticmethod(lambda *_: None),
+        },
+    )
+    Gegl = type(
+        "Gegl",
+        (),
+        {"Color": type("Color", (), {"new": staticmethod(lambda _: object())})},
+    )
+    mark = make_recipe().marks[0]
+
+    _NativeGimpOperations(Image(), Source(), Gimp, Gegl, object()).apply_mark(
+        mark, Path("C:/assets/dry-rub-neutral-gray.gbr")
+    )
+
+    assert calls == [("rotate", (math.radians(mark.rotation_degrees), True, 0.0, 0.0))]
+
+
 def test_interactive_request_parses_a_recipe_and_absolute_asset_map() -> None:
     import json
 
