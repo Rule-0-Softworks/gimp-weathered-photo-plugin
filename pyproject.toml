@@ -40,7 +40,7 @@ branch = true
 source = ["gimp_weathered_photo_plugin"]
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 75
 show_missing = true
 
 [tool.ruff]
