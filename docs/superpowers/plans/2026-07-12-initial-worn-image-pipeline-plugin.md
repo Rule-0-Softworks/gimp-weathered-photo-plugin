@@ -99,8 +99,10 @@
   exceed permitted soft-exclusion overlap.
 - [ ] Run focused tests and observe collection/import failures.
 - [ ] Add `assets/worn-print-manifest.json` with the exact IDs/relative paths
-  from the design spec, declare its six files as package data, implement
-  preflight, `secrets.randbits(128)`
+  from the design spec, declare its six original GIMP-authored grayscale asset
+  files as package data, and create the two broken dry-rub brushes, one
+  restrained mottled brush, and three non-circular water-stain masks with
+  GIMP. Implement preflight, `secrets.randbits(128)`
   default entropy, bounded random scale/rotation/opacity/density/direction,
   weighted rejection sampling, and a hard maximum mark count. Do not inspect
   filenames for entropy.

@@ -89,11 +89,15 @@ contains these stable IDs and relative paths: `dry-rub-neutral-gray`
 (`brushes/mottled-sepia.gbr`), `water-stain-01`
 (`masks/water-stain-01.png`), `water-stain-02`
 (`masks/water-stain-02.png`), and `water-stain-03`
-(`masks/water-stain-03.png`). The adapter loads `.gbr` files as GIMP brush
-resources and uses the PNGs only as local layer-mask sources. Unit tests use a
-temporary manifest and zero-content placeholder files; native smoke requires
-the licensed final assets. The final source/licensing for these assets must be
-approved before native-proof rendering.
+(`masks/water-stain-03.png`). These are original, package-owned GIMP assets:
+the first two brushes are irregular, broken dry-rub textures; the third is a
+restrained mottled texture; the masks are three non-circular, low-contrast
+water-stain silhouettes. They are grayscale so GIMP applies neutral gray,
+umber, or minimal sepia at render time. The adapter loads `.gbr` files as GIMP
+brush resources and uses the PNGs only as local layer-mask sources. Unit tests
+use a temporary manifest and zero-content placeholder files; native smoke uses
+the final assets created through GIMP and committed to package data. No
+third-party brush license or host-specific default brush name is required.
 
 ## Test Strategy
 
