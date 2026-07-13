@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, cast
@@ -64,6 +65,7 @@ def analyze_request(
         != request.source_sha256
     ):
         raise AnalyzerError("source fingerprint mismatch")
+    os.environ["MPLCONFIGDIR"] = str(request.source_path.parent / ".matplotlib")
     detectors, exclusions = adapter.analyze(request.source_path)
     validated = _validate_detectors(detectors)
     failed = next(

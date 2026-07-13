@@ -1,4 +1,5 @@
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,20 @@ def _request(source: Path) -> AnalysisRequest:
         source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         source_size=Size(20, 10),
     )
+
+
+def test_analyzer_keeps_matplotlib_cache_with_the_staged_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from gimp_weathered_photo_plugin.analyzer import analyze_request
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"source")
+    monkeypatch.delenv("MPLCONFIGDIR", raising=False)
+
+    analyze_request(_request(source), FakeAdapter())
+
+    assert Path(os.environ["MPLCONFIGDIR"]) == source.parent / ".matplotlib"
 
 
 def test_analyzer_keeps_saliency_protection_when_no_face_or_hand_is_detected(
