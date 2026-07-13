@@ -8,7 +8,6 @@ from pathlib import Path
 from gimp_weathered_photo_plugin.assets import resolve_assets
 from gimp_weathered_photo_plugin.batch import process_batch
 from gimp_weathered_photo_plugin.gimp_console_bridge import GimpConsoleBridge
-from gimp_weathered_photo_plugin.metadata import AnalysisProvenance
 from gimp_weathered_photo_plugin.planning import plan_treatment
 from gimp_weathered_photo_plugin.semantic_bridge import SemanticAnalysisBridge
 
@@ -52,16 +51,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             if analyzer_executable is not None and replay_record is None
             else None
         )
-        provenance = (
-            AnalysisProvenance(
-                analyzer_version=arguments.analyzer_version,
-                adapter_configuration={
-                    "arguments": "-m gimp_weathered_photo_plugin.analyzer",
-                    "executable": str(analyzer_executable),
-                },
-            )
+        fresh_arguments = (
+            {"analyzer_version": arguments.analyzer_version}
             if bridge is not None
-            else None
+            else {}
         )
         results = process_batch(
             inputs,
@@ -70,9 +63,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             assets=resolve_packaged_assets(),
             recipe_factory=plan_treatment,
             semantic_bridge=bridge,
-            analysis_provenance=provenance,
             replay_record=replay_record,
             overwrite=arguments.overwrite,
+            **fresh_arguments,
         )
     except (OSError, ValueError, RuntimeError) as error:
         print(f"batch setup failed: {error}", file=sys.stderr)

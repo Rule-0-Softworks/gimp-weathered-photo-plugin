@@ -11,21 +11,15 @@ from gimp_weathered_photo_plugin.models import Size, SoftExclusion, TreatmentRec
 
 _DETECTORS = frozenset({"face", "hand", "saliency"})
 _STATUSES = frozenset({"detected", "no_detection", "disabled", "failed"})
-
-
-@dataclass(frozen=True, slots=True)
-class AnalysisProvenance:
-    analyzer_version: str
-    adapter_configuration: Mapping[str, str]
-
-    def __post_init__(self) -> None:
-        if not self.analyzer_version:
-            raise ValueError("analyzer version must not be empty")
-        if not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in self.adapter_configuration.items()
-        ):
-            raise ValueError("adapter configuration must contain string values")
+_MODEL_PROVENANCE_KEYS = frozenset(
+    {
+        "advisories.schema_version",
+        "model.face-landmarker.sha256",
+        "model.face-landmarker.version",
+        "model.hand-landmarker.sha256",
+        "model.hand-landmarker.version",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +57,20 @@ class RenderRecord:
             status not in _STATUSES for status in self.detectors.values()
         ):
             raise ValueError("record detectors are invalid")
-        AnalysisProvenance(self.analyzer_version, self.adapter_configuration)
+        if not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in self.adapter_configuration.items()
+        ):
+            raise ValueError("adapter configuration must contain string values")
+        if self.bridge_schema_version >= 2:
+            if not _MODEL_PROVENANCE_KEYS.issubset(self.adapter_configuration):
+                raise ValueError("adapter configuration is missing model provenance")
+            _validate_sha256(
+                self.adapter_configuration["model.face-landmarker.sha256"]
+            )
+            _validate_sha256(
+                self.adapter_configuration["model.hand-landmarker.sha256"]
+            )
 
 
 def write_render_record(path: Path, record: RenderRecord) -> Path:

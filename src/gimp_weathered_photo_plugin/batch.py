@@ -15,7 +15,6 @@ from gimp_weathered_photo_plugin.bridge_protocol import (
     AnalysisResponse,
 )
 from gimp_weathered_photo_plugin.metadata import (
-    AnalysisProvenance,
     RenderRecord,
     load_render_record,
     write_render_record,
@@ -67,7 +66,7 @@ def process_batch(
     assets: Mapping[str, Path],
     recipe_factory: RecipeFactory,
     semantic_bridge: SemanticAnalyzer | None = None,
-    analysis_provenance: AnalysisProvenance | None = None,
+    analyzer_version: str | None = None,
     replay_recipe: TreatmentRecipe | None = None,
     replay_record: RenderRecord | Path | None = None,
     overwrite: bool = False,
@@ -109,7 +108,7 @@ def process_batch(
                         fingerprints,
                         recipe_factory,
                         semantic_bridge,
-                        analysis_provenance,
+                        analyzer_version,
                     )
                 else:
                     _validate_replay_record(record, staged.sha256, size, fingerprints)
@@ -202,12 +201,12 @@ def _prepare_fresh_record(
     fingerprints: Mapping[str, str],
     recipe_factory: RecipeFactory,
     semantic_bridge: SemanticAnalyzer | None,
-    provenance: AnalysisProvenance | None,
+    analyzer_version: str | None,
 ) -> RenderRecord:
     if semantic_bridge is None:
         raise ValueError("fresh rendering requires a semantic analysis bridge")
-    if provenance is None:
-        raise ValueError("fresh rendering analyzer provenance is required")
+    if not analyzer_version:
+        raise ValueError("fresh rendering analyzer version is required")
     response = semantic_bridge.analyze(
         AnalysisRequest(
             bridge_schema_version=BRIDGE_SCHEMA_VERSION,
@@ -237,8 +236,8 @@ def _prepare_fresh_record(
         asset_sha256=fingerprints,
         bridge_schema_version=response.bridge_schema_version,
         recipe_schema_version=recipe.schema_version,
-        analyzer_version=provenance.analyzer_version,
-        adapter_configuration=provenance.adapter_configuration,
+        analyzer_version=analyzer_version,
+        adapter_configuration=response.adapter_configuration,
         detectors=response.detectors,
         exclusions=tuple(response.exclusions),
     )

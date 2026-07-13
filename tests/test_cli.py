@@ -133,13 +133,8 @@ def test_cli_configures_native_batch_renderer_and_analyzer(
     assert isinstance(bridge, cli.SemanticAnalysisBridge)
     assert bridge.executable == tmp_path / "python.exe"
     assert bridge.arguments == ("-m", "gimp_weathered_photo_plugin.analyzer")
-    provenance = captured_kwargs["analysis_provenance"]
-    assert isinstance(provenance, cli.AnalysisProvenance)
-    assert provenance.analyzer_version == "1.2.3"
-    assert provenance.adapter_configuration == {
-        "arguments": "-m gimp_weathered_photo_plugin.analyzer",
-        "executable": str(tmp_path / "python.exe"),
-    }
+    assert captured_kwargs["analyzer_version"] == "1.2.3"
+    assert "analysis_provenance" not in captured_kwargs
 
 
 def test_cli_replay_skips_analyzer_configuration(
@@ -174,7 +169,7 @@ def test_cli_replay_skips_analyzer_configuration(
     assert exit_code == 0
     assert captured_kwargs["replay_record"] == record
     assert captured_kwargs["semantic_bridge"] is None
-    assert captured_kwargs["analysis_provenance"] is None
+    assert "analyzer_version" not in captured_kwargs
 
 
 def test_cli_reports_setup_errors(

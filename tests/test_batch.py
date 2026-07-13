@@ -17,7 +17,7 @@ from gimp_weathered_photo_plugin.bridge_protocol import (
     AnalysisResponse,
     DetectorStatus,
 )
-from gimp_weathered_photo_plugin.metadata import RenderRecord
+from gimp_weathered_photo_plugin.metadata import RenderRecord, load_render_record
 from gimp_weathered_photo_plugin.models import Size, TreatmentRecipe
 from tests.test_models import make_recipe
 
@@ -48,6 +48,16 @@ def _assets(tmp_path: Path) -> dict[str, Path]:
 
 def _recipe() -> TreatmentRecipe:
     return replace(make_recipe(), source_size=Size(width=10, height=20))
+
+
+def _adapter_configuration() -> dict[str, str]:
+    return {
+        "advisories.schema_version": "1",
+        "model.face-landmarker.sha256": "a" * 64,
+        "model.face-landmarker.version": "gcs-generation-1683136941468629",
+        "model.hand-landmarker.sha256": "b" * 64,
+        "model.hand-landmarker.version": "gcs-generation-1682480005356399",
+    }
 
 
 class FakeRenderer:
@@ -130,13 +140,23 @@ class FakeBridge:
             bridge_schema_version=2,
             source_sha256=request.source_sha256,
             detectors=detectors,
-            adapter_configuration={"advisories.schema_version": "1"},
+            adapter_configuration=_adapter_configuration(),
             exclusions=_recipe().exclusions,
         )
 
 
 class FailingBridge:
     def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
+        raise AssertionError("replay must not invoke the semantic bridge")
+
+
+class _ExplodingBridge:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
+        del request
+        self.calls += 1
         raise AssertionError("replay must not invoke the semantic bridge")
 
 
@@ -156,8 +176,6 @@ def _fresh_result(
     *,
     overwrite: bool = False,
 ) -> list[BatchResult]:
-    from gimp_weathered_photo_plugin.metadata import AnalysisProvenance
-
     return process_batch(
         [source],
         output_dir,
@@ -165,9 +183,7 @@ def _fresh_result(
         assets=assets,
         recipe_factory=lambda size, exclusions, _assets: _recipe(),
         semantic_bridge=bridge,
-        analysis_provenance=AnalysisProvenance(
-            analyzer_version="1.2.3", adapter_configuration={"model": "holistic"}
-        ),
+        analyzer_version="1.2.3",
         overwrite=overwrite,
     )
 
@@ -184,8 +200,6 @@ def test_fresh_batch_stages_analyzes_and_persists_the_complete_render_record(
         source, tmp_path / "out", renderer, _assets(tmp_path), bridge
     )
 
-    from gimp_weathered_photo_plugin.metadata import load_render_record
-
     assert results[0].success is True
     assert renderer.calls[0] != source
     assert renderer.source_bytes[0] == source.read_bytes()
@@ -196,14 +210,36 @@ def test_fresh_batch_stages_analyzes_and_persists_the_complete_render_record(
     assert record.exclusions == _recipe().exclusions
     assert record.detectors["saliency"] == "detected"
     assert record.analyzer_version == "1.2.3"
-    assert record.adapter_configuration == {"model": "holistic"}
+    assert record.adapter_configuration == _adapter_configuration()
     assert record.asset_sha256 == {
         "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest(),
         "water-stain-01": hashlib.sha256(b"water").hexdigest(),
     }
 
 
-def test_fresh_batch_requires_explicit_analyzer_provenance_before_rendering(
+def test_fresh_record_persists_analyzer_returned_model_provenance(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(_png())
+
+    results = process_batch(
+        [source],
+        tmp_path / "out",
+        FakeRenderer(),
+        assets=_assets(tmp_path),
+        recipe_factory=lambda size, exclusions, _assets: _recipe(),
+        semantic_bridge=FakeBridge(),
+        analyzer_version="0.10.35",
+    )
+
+    record = load_render_record(results[0].recipe_path)
+
+    assert record.adapter_configuration["model.face-landmarker.sha256"] == "a" * 64
+    assert record.adapter_configuration["advisories.schema_version"] == "1"
+
+
+def test_fresh_batch_requires_analyzer_version_before_rendering(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "print.png"
@@ -217,11 +253,12 @@ def test_fresh_batch_requires_explicit_analyzer_provenance_before_rendering(
         assets=_assets(tmp_path),
         recipe_factory=lambda size, exclusions, _assets: _recipe(),
         semantic_bridge=FakeBridge(),
+        analyzer_version="",
     )
 
     assert results[0].success is False
     assert results[0].error is not None
-    assert "analyzer provenance is required" in results[0].error
+    assert "fresh rendering analyzer version is required" in results[0].error
     assert renderer.calls == []
 
 
@@ -233,7 +270,6 @@ def test_replay_loads_a_record_without_calling_the_semantic_bridge(
     assets = _assets(tmp_path)
     recipe_path = tmp_path / "saved.recipe.json"
     from gimp_weathered_photo_plugin.metadata import (
-        AnalysisProvenance,
         write_render_record,
     )
 
@@ -247,7 +283,7 @@ def test_replay_loads_a_record_without_calling_the_semantic_bridge(
         },
         bridge_schema_version=1,
         recipe_schema_version=1,
-        analyzer_version=AnalysisProvenance("1.2.3", {}).analyzer_version,
+        analyzer_version="1.2.3",
         adapter_configuration={},
         detectors={
             "face": "no_detection",
@@ -269,6 +305,47 @@ def test_replay_loads_a_record_without_calling_the_semantic_bridge(
     )
 
     assert results[0].success is True
+
+
+def test_replay_does_not_construct_or_call_the_semantic_bridge(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(_png())
+    assets = _assets(tmp_path)
+    record = RenderRecord(
+        recipe=_recipe(),
+        source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        source_size=Size(width=10, height=20),
+        asset_sha256={
+            "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest(),
+            "water-stain-01": hashlib.sha256(b"water").hexdigest(),
+        },
+        bridge_schema_version=1,
+        recipe_schema_version=1,
+        analyzer_version="1.2.3",
+        adapter_configuration={},
+        detectors={
+            "face": "no_detection",
+            "hand": "no_detection",
+            "saliency": "detected",
+        },
+        exclusions=_recipe().exclusions,
+    )
+    bridge = _ExplodingBridge()
+
+    results = process_batch(
+        [source],
+        tmp_path / "out",
+        FakeRenderer(),
+        assets=assets,
+        recipe_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("called")),
+        semantic_bridge=bridge,
+        replay_record=record,
+    )
+
+    assert results[0].success
+    assert bridge.calls == 0
 
 
 def test_replay_rejects_recipe_assets_missing_from_persisted_and_current_maps(
@@ -391,8 +468,6 @@ def test_batch_continues_after_one_failure_and_writes_three_outputs(
     failed.write_bytes(_png())
     succeeded.write_bytes(_png())
     renderer = FailingFirstRenderer()
-    from gimp_weathered_photo_plugin.metadata import AnalysisProvenance
-
     results = process_batch(
         [failed, succeeded],
         tmp_path / "out",
@@ -400,7 +475,7 @@ def test_batch_continues_after_one_failure_and_writes_three_outputs(
         assets=_assets(tmp_path),
         recipe_factory=lambda size, exclusions, _assets: _recipe(),
         semantic_bridge=FakeBridge(),
-        analysis_provenance=AnalysisProvenance("1.2.3", {}),
+        analyzer_version="1.2.3",
     )
 
     assert [result.success for result in results] == [False, True]
