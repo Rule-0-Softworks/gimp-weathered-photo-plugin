@@ -8,19 +8,20 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-D22128)](LICENSE)
 [![Status](https://img.shields.io/badge/status-scaffolding-6A5ACD)](https://github.com/Rule-0-Softworks/gimp-weathered-photo-plugin)
 
-A reproducible Python foundation for a future GIMP 3 plug-in that will apply a
-weathered print treatment to images.
+A GIMP 3-native batch renderer that applies a weathered print treatment to
+filesystem-backed PNG images.
 
-> **Project status:** the public scaffold is ready. Packaging, verification,
-> coverage, security scanning, dependency updates, and release automation are
-> in place; GIMP integration and image-treatment behavior are intentionally
-> not implemented yet.
+> **Project status:** native smoke validation awaits four approved Vezor PNG
+> inputs. This repository does not claim the treatment has been visually
+> validated.
 
 ## What is here
 
-- Python 3.12+ package scaffolding managed with uv.
+- Python 3.12+ package managed with uv.
 - A locked, reproducible development environment.
-- Tests, 100% coverage enforcement, Ruff, and ty checks.
+- Batch-only GIMP rendering with a temporary per-run brush configuration.
+- Standard-CPython MediaPipe/OpenCV semantic analysis for fresh renders.
+- Replay from a saved complete render record through `--replay-recipe`.
 - GitHub Actions CI, CodeQL, Codecov reporting, Dependabot, and Release Please.
 
 ## Quick start
@@ -45,6 +46,38 @@ uv run ty check
 The commands are shell-agnostic; replace the PowerShell prompt with your
 preferred terminal. The test command writes `coverage.xml` for Codecov.
 
+## Bundled MediaPipe model updates
+
+The application never fetches or upgrades bundled MediaPipe models. A `low`
+advisory warns and permits fresh rendering; `medium`, `high`, and `critical`
+advisories block fresh rendering.
+
+An operator updates a model manually in a reviewed change: replace the
+official file, update its manifest size, SHA-256 hash, version, and source,
+update the advisory record, run the compatibility smoke test, and commit the
+reviewed change. See the [MediaPipe Tasks model assets design](docs/superpowers/specs/2026-07-13-mediapipe-tasks-model-assets-design.md)
+for the complete pinned-asset contract.
+
+## Batch rendering
+
+The command-line entry point runs GIMP's native batch host; it does not process
+pixels itself and it does not modify a permanent GIMP brush folder. Fresh
+rendering requires an absolute GIMP console path and an absolute standard-
+CPython analyzer executable. Replay does not require analyzer dependencies.
+
+```powershell
+uv run python -m gimp_weathered_photo_plugin `
+  --gimp-console "C:\\path\\to\\gimp-console-3.2.exe" `
+  --analyzer-executable "$PWD\\.venv\\Scripts\\python.exe" `
+  --analyzer-version "local-locked" `
+  --output-dir .\\out `
+  .\\input.png
+```
+
+See [the GIMP smoke test](docs/gimp-smoke-test.md) for analyzer setup,
+batch diagnostics, replay, staging cleanup, and the four approved Vezor input
+limit.
+
 ## Quality automation
 
 | Service | Purpose |
@@ -60,7 +93,7 @@ preferred terminal. The test command writes `coverage.xml` for Codecov.
 ```text
 .
 ├── .github/                         # CI, CodeQL, Dependabot, Release Please
-├── src/gimp_weathered_photo_plugin/ # package metadata only
+├── src/gimp_weathered_photo_plugin/ # batch, analysis, and GIMP bridge
 ├── tests/                           # package and automation contracts
 ├── pyproject.toml                   # packaging and quality-tool configuration
 └── uv.lock                          # locked development dependencies

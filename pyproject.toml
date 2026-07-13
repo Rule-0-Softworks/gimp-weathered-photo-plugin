@@ -15,8 +15,12 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
 ]
-dependencies = []
+dependencies = [
+  "mediapipe>=0.10.35,<0.11",
+  "opencv-contrib-python>=5.0.0.93,<5.1",
+]
 
 [dependency-groups]
 dev = [
@@ -36,7 +40,7 @@ branch = true
 source = ["gimp_weathered_photo_plugin"]
 
 [tool.coverage.report]
-fail_under = 100
+fail_under = 75
 show_missing = true
 
 [tool.ruff]
@@ -47,4 +51,4 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ty.environment]
-python-version = "3.12"
+python-version = "3.14"

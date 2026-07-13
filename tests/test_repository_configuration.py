@@ -26,6 +26,7 @@ def test_ci_runs_every_required_quality_command() -> None:
     runs = {step["run"] for step in steps if "run" in step}
 
     assert "uv sync --locked" in runs
+    assert "sudo apt-get update && sudo apt-get install -y libegl1 libgles2" in runs
     assert "uv run pytest --cov --cov-branch --cov-report=xml" in runs
     assert "uv run ruff format --check ." in runs
     assert "uv run ruff check ." in runs
@@ -42,7 +43,7 @@ def test_ci_pins_python_and_configures_coverage_upload() -> None:
         if str(step.get("uses", "")).startswith("codecov/codecov-action@")
     )
 
-    assert any(step.get("with", {}).get("python-version") == 3.12 for step in steps)
+    assert any(step.get("with", {}).get("python-version") == 3.14 for step in steps)
     assert codecov_step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
     assert codecov_step["if"] == "github.actor != 'dependabot[bot]'"
 
@@ -98,6 +99,17 @@ def test_supporting_yaml_configuration_has_expected_structure() -> None:
     assert {"project", "patch"} <= set(codecov["coverage"]["status"])
     assert "release-please" in release["jobs"]
     assert release["permissions"]["issues"] == "write"
+
+
+def test_codecov_coverage_status_policy_allows_small_project_regressions() -> None:
+    codecov = load_yaml(".codecov.yml")
+
+    project = codecov["coverage"]["status"]["project"]["default"]
+    assert project["target"] == "auto"
+    assert project["threshold"] == "0.5%"
+    patch = codecov["coverage"]["status"]["patch"]["default"]
+    assert patch["target"] == "75%"
+    assert patch["threshold"] == "0.5%"
 
 
 def test_release_please_json_uses_python_manifest_mode() -> None:
