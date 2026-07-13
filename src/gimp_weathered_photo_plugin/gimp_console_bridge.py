@@ -10,6 +10,10 @@ from pathlib import Path
 
 from gimp_weathered_photo_plugin.models import TreatmentRecipe
 
+_TEMP_ROOT = Path(
+    r"C:\Projects\Rule0Softworks\project\tmp\gimp-weathered-photo-plugin-temp"
+)
+
 
 class GimpConsoleError(RuntimeError):
     pass
@@ -42,8 +46,9 @@ class GimpConsoleBridge:
         }
         if not all(path.is_file() for path in resolved_assets.values()):
             raise GimpConsoleError("GIMP render assets are missing")
+        _TEMP_ROOT.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(
-            prefix="gimp-weathered-", dir=source.parent
+            prefix="gimp-weathered-", dir=_TEMP_ROOT
         ) as temporary:
             configuration = Path(temporary)
             request_path = configuration / "request.json"

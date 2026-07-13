@@ -45,6 +45,20 @@ def validate_interactive_source(path: Path | None, is_dirty: bool) -> Path:
     return path
 
 
+def parse_interactive_request(
+    recipe_json: str, asset_map_json: str
+) -> tuple[TreatmentRecipe, dict[str, Path]]:
+    try:
+        recipe = TreatmentRecipe.from_dict(json.loads(recipe_json))
+        raw_assets = cast(dict[str, str], json.loads(asset_map_json))
+        assets = {asset_id: Path(path) for asset_id, path in raw_assets.items()}
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise ValueError("interactive recipe or asset map is invalid") from error
+    if not all(path.is_absolute() for path in assets.values()):
+        raise ValueError("interactive asset paths must be absolute")
+    return recipe, assets
+
+
 @dataclass(frozen=True, slots=True)
 class ConsoleRequest:
     source: Path
@@ -99,7 +113,7 @@ def run_console_request(request_path: str) -> None:
     if not layers:
         raise RuntimeError("staged source has no drawable layer")
     try:
-        operations = _NativeGimpOperations(image, layers[0], Gimp, Gegl)
+        operations = _NativeGimpOperations(image, layers[0], Gimp, Gegl, Gio)
         apply_recipe(operations, request.recipe, request.assets)
         if not Gimp.file_save(
             Gimp.RunMode.NONINTERACTIVE,
@@ -133,11 +147,12 @@ def _load_gimp() -> tuple[Any, Any, Any]:
 
 
 class _NativeGimpOperations:
-    def __init__(self, image: Any, source: Any, gimp: Any, gegl: Any) -> None:
+    def __init__(self, image: Any, source: Any, gimp: Any, gegl: Any, gio: Any) -> None:
         self._image = image
         self._source = source
         self._gimp = gimp
         self._gegl = gegl
+        self._gio = gio
         self._exclusions: tuple[SoftExclusion, ...] = ()
 
     def retain_source(self) -> None:
@@ -151,8 +166,7 @@ class _NativeGimpOperations:
         layer = self._new_treatment_layer(
             f"Weathered {mark.family}: {asset.stem}", mark
         )
-        mask = layer.create_mask(self._gimp.AddMaskType.BLACK)
-        layer.add_mask(mask)
+        mask = self._add_source_alpha_mask(layer)
         self._paint_with_brush(layer, mark, asset)
         self._paint_mask_with_brush(mask, mark, asset)
         self._apply_exclusions(mask)
@@ -167,9 +181,8 @@ class _NativeGimpOperations:
         blurred_source = self._source.copy()
         blurred_source.set_name(f"Water stain blur: {asset.stem}")
         self._image.insert_layer(blurred_source, None, 0)
-        mask = blurred_source.create_mask(self._gimp.AddMaskType.BLACK)
-        blurred_source.add_mask(mask)
-        self._apply_organic_mask(mask, mark, asset)
+        mask = self._add_source_alpha_mask(blurred_source)
+        self._apply_water_stain_asset(mask, asset)
         self._apply_exclusions(mask)
         blur = self._gimp.DrawableFilter.new(blurred_source, "gegl:gaussian-blur", None)
         config = blur.get_config()
@@ -193,6 +206,15 @@ class _NativeGimpOperations:
         layer.fill(self._gimp.FillType.TRANSPARENT)
         self._image.insert_layer(layer, None, 0)
         return layer
+
+    def _add_source_alpha_mask(self, layer: Any) -> Any:
+        self._image.select_item(self._gimp.ChannelOps.REPLACE, self._source)
+        try:
+            mask = layer.create_mask(self._gimp.AddMaskType.SELECTION)
+            layer.add_mask(mask)
+            return mask
+        finally:
+            self._gimp.Selection.none(self._image)
 
     def _paint_with_brush(self, layer: Any, mark: Mark, asset: Path) -> None:
         brush = self._gimp.Brush.get_by_name(asset.stem)
@@ -263,6 +285,24 @@ class _NativeGimpOperations:
             finally:
                 self._gimp.context_pop()
 
+    def _apply_water_stain_asset(self, mask: Any, asset: Path) -> None:
+        asset_image = self._gimp.file_load(
+            self._gimp.RunMode.NONINTERACTIVE,
+            self._gio.File.new_for_path(str(asset)),
+        )
+        try:
+            asset_layers = asset_image.get_layers()
+            if not asset_layers or not self._gimp.edit_copy([asset_layers[0]]):
+                raise RuntimeError(f"GIMP could not load water-stain mask {asset.stem}")
+            pasted = self._gimp.edit_paste(mask, False)
+            if not pasted:
+                raise RuntimeError(
+                    f"GIMP could not paste water-stain mask {asset.stem}"
+                )
+            pasted[0].floating_sel_anchor()
+        finally:
+            asset_image.delete()
+
     def _apply_exclusions(self, mask: Any) -> None:
         for exclusion in self._exclusions:
             width = exclusion.radius_x * 2.0 * self._image.get_width()
@@ -283,6 +323,7 @@ def main() -> None:
     """Register the real GIMP 3 procedures when this file is run by GIMP."""
 
     Gimp, GLib, GObject = _load_gimp_plugin_runtime()
+    _gimp, Gegl, Gio = _load_gimp()
 
     def run_interactive(
         procedure: Any,
@@ -292,11 +333,34 @@ def main() -> None:
         config: Any,
         data: Any,
     ) -> Any:
-        source = validate_interactive_source(
-            Path(image.get_file().get_path()) if image.get_file() is not None else None,
-            image.is_dirty(),
-        )
-        del source, drawables, config, data
+        try:
+            validate_interactive_source(
+                Path(image.get_file().get_path())
+                if image.get_file() is not None
+                else None,
+                image.is_dirty(),
+            )
+            recipe, assets = parse_interactive_request(
+                config.get_property("recipe-json"),
+                config.get_property("asset-map-json"),
+            )
+            if (image.get_width(), image.get_height()) != (
+                recipe.source_size.width,
+                recipe.source_size.height,
+            ):
+                raise ValueError("interactive image dimensions do not match the recipe")
+            if not drawables:
+                raise ValueError("interactive image has no drawable")
+            apply_recipe(
+                _NativeGimpOperations(image, drawables[0], Gimp, Gegl, Gio),
+                recipe,
+                assets,
+            )
+        except Exception as error:
+            return procedure.new_return_values(
+                Gimp.PDBStatusType.EXECUTION_ERROR, GLib.Error(str(error))
+            )
+        del data, run_mode
         return procedure.new_return_values(Gimp.PDBStatusType.SUCCESS, GLib.Error())
 
     def run_batch(
@@ -323,6 +387,20 @@ def main() -> None:
                 procedure.set_image_types("RGB*, GRAY*")
                 procedure.set_menu_label("Weathered Photo")
                 procedure.add_menu_path("<Image>/Filters/Artistic")
+                procedure.add_string_argument(
+                    "recipe-json",
+                    "Recipe JSON",
+                    "Validated treatment recipe JSON",
+                    "",
+                    GObject.ParamFlags.READWRITE,
+                )
+                procedure.add_string_argument(
+                    "asset-map-json",
+                    "Asset map JSON",
+                    "Absolute asset-path map JSON",
+                    "",
+                    GObject.ParamFlags.READWRITE,
+                )
                 return procedure
             procedure = Gimp.BatchProcedure.new(
                 self, name, "Python 3", Gimp.PDBProcType.PLUGIN, run_batch, None

@@ -11,6 +11,13 @@ from gimp_weathered_photo_plugin.gimp_console_bridge import (
 from tests.test_models import make_recipe
 
 
+@pytest.fixture(autouse=True)
+def temporary_configuration_root(tmp_path: Path, monkeypatch) -> None:
+    import gimp_weathered_photo_plugin.gimp_console_bridge as bridge_module
+
+    monkeypatch.setattr(bridge_module, "_TEMP_ROOT", tmp_path / "project-temp")
+
+
 def _assets(tmp_path: Path) -> dict[str, Path]:
     brush = tmp_path / "dry-rub-neutral-gray.gbr"
     mask = tmp_path / "water-stain-01.png"
@@ -54,6 +61,42 @@ def test_console_bridge_uses_argument_list_and_absolute_request_paths(
 
     assert calls[0][0][0] == "C:\\GIMP\\bin\\gimp-console.exe"
     assert calls[0][1]["shell"] is False
+
+
+def test_console_bridge_cleans_a_per_run_configuration_under_project_temp(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import gimp_weathered_photo_plugin.gimp_console_bridge as bridge_module
+
+    source = tmp_path / "source.png"
+    png = tmp_path / "result.png"
+    xcf = tmp_path / "result.xcf"
+    source.write_bytes(b"source")
+    root = tmp_path / "project-temp"
+    captured: list[Path] = []
+
+    def fake_run(command: list[str], **_: object) -> CompletedProcess[str]:
+        configuration = Path(
+            next(
+                item.split("=", 1)[1]
+                for item in command
+                if item.startswith("--gimprc=")
+            )
+        ).parent
+        captured.append(configuration)
+        png.write_bytes(b"png")
+        xcf.write_bytes(b"xcf")
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(bridge_module, "_TEMP_ROOT", root)
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe")).render(
+        source, png, xcf, make_recipe(), _assets(tmp_path)
+    )
+
+    assert captured[0].parent == root
+    assert not captured[0].exists()
 
 
 @pytest.mark.parametrize("returncode,outputs", [(1, True), (0, False)])
