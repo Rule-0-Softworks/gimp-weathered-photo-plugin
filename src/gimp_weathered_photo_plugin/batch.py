@@ -79,7 +79,6 @@ def process_batch(
         # not influence replay behavior.
         semantic_bridge = None
     record = _load_replay_record(replay_record)
-    provenance = analysis_provenance or AnalysisProvenance("unknown", {})
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[BatchResult] = []
     for source in inputs:
@@ -110,7 +109,7 @@ def process_batch(
                         fingerprints,
                         recipe_factory,
                         semantic_bridge,
-                        provenance,
+                        analysis_provenance,
                     )
                 else:
                     _validate_replay_record(record, staged.sha256, size, fingerprints)
@@ -169,6 +168,7 @@ def publish_output_set(
     backup_directory.mkdir()
     backups: list[Path | None] = [None, None, None]
     published = [False, False, False]
+    cleanup_backup = False
     try:
         for index, final_path in enumerate(final):
             if final_path.exists():
@@ -185,9 +185,13 @@ def publish_output_set(
             _restore_output_set(final, backups, published)
         except Exception as rollback_error:
             raise RuntimeError("output publication rollback failed") from rollback_error
+        cleanup_backup = True
         raise
+    else:
+        cleanup_backup = True
     finally:
-        shutil.rmtree(backup_directory, ignore_errors=True)
+        if cleanup_backup:
+            shutil.rmtree(backup_directory, ignore_errors=True)
 
 
 def _prepare_fresh_record(
@@ -198,10 +202,12 @@ def _prepare_fresh_record(
     fingerprints: Mapping[str, str],
     recipe_factory: RecipeFactory,
     semantic_bridge: SemanticAnalyzer | None,
-    provenance: AnalysisProvenance,
+    provenance: AnalysisProvenance | None,
 ) -> RenderRecord:
     if semantic_bridge is None:
         raise ValueError("fresh rendering requires a semantic analysis bridge")
+    if provenance is None:
+        raise ValueError("fresh rendering analyzer provenance is required")
     response = semantic_bridge.analyze(
         AnalysisRequest(
             bridge_schema_version=BRIDGE_SCHEMA_VERSION,
@@ -252,6 +258,14 @@ def _validate_replay_record(
     source_size: Size,
     asset_sha256: Mapping[str, str],
 ) -> None:
+    recipe_assets = {mark.asset_id for mark in record.recipe.marks}
+    missing = recipe_assets - set(record.asset_sha256) | recipe_assets - set(
+        asset_sha256
+    )
+    if missing:
+        raise ValueError(
+            f"replay recipe references unavailable assets: {', '.join(sorted(missing))}"
+        )
     if record.source_sha256 != source_sha256:
         raise ValueError("replay source fingerprint mismatch")
     if record.source_size != source_size:

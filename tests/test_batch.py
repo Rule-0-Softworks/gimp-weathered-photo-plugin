@@ -36,9 +36,14 @@ def _png(width: int = 10, height: int = 20) -> bytes:
 def _assets(tmp_path: Path) -> dict[str, Path]:
     root = tmp_path / "assets"
     root.mkdir(parents=True)
-    asset = root / "dry-rub-neutral-gray.gbr"
-    asset.write_bytes(b"brush")
-    return {"dry-rub-neutral-gray": asset}
+    dry_rub = root / "dry-rub-neutral-gray.gbr"
+    water_stain = root / "water-stain-01.png"
+    dry_rub.write_bytes(b"brush")
+    water_stain.write_bytes(b"water")
+    return {
+        "dry-rub-neutral-gray": dry_rub,
+        "water-stain-01": water_stain,
+    }
 
 
 def _recipe() -> TreatmentRecipe:
@@ -192,8 +197,31 @@ def test_fresh_batch_stages_analyzes_and_persists_the_complete_render_record(
     assert record.analyzer_version == "1.2.3"
     assert record.adapter_configuration == {"model": "holistic"}
     assert record.asset_sha256 == {
-        "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest()
+        "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest(),
+        "water-stain-01": hashlib.sha256(b"water").hexdigest(),
     }
+
+
+def test_fresh_batch_requires_explicit_analyzer_provenance_before_rendering(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(_png())
+    renderer = FakeRenderer()
+
+    results = process_batch(
+        [source],
+        tmp_path / "out",
+        renderer,
+        assets=_assets(tmp_path),
+        recipe_factory=lambda size, exclusions, _assets: _recipe(),
+        semantic_bridge=FakeBridge(),
+    )
+
+    assert results[0].success is False
+    assert results[0].error is not None
+    assert "analyzer provenance is required" in results[0].error
+    assert renderer.calls == []
 
 
 def test_replay_loads_a_record_without_calling_the_semantic_bridge(
@@ -212,7 +240,10 @@ def test_replay_loads_a_record_without_calling_the_semantic_bridge(
         recipe=_recipe(),
         source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         source_size=Size(width=10, height=20),
-        asset_sha256={"dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest()},
+        asset_sha256={
+            "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest(),
+            "water-stain-01": hashlib.sha256(b"water").hexdigest(),
+        },
         bridge_schema_version=1,
         recipe_schema_version=1,
         analyzer_version=AnalysisProvenance("1.2.3", {}).analyzer_version,
@@ -237,6 +268,45 @@ def test_replay_loads_a_record_without_calling_the_semantic_bridge(
     )
 
     assert results[0].success is True
+
+
+def test_replay_rejects_recipe_assets_missing_from_persisted_and_current_maps(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(_png())
+    assets = _assets(tmp_path)
+    record = RenderRecord(
+        recipe=_recipe(),
+        source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        source_size=Size(width=10, height=20),
+        asset_sha256={"dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest()},
+        bridge_schema_version=1,
+        recipe_schema_version=1,
+        analyzer_version="1.2.3",
+        adapter_configuration={},
+        detectors={
+            "face": "no_detection",
+            "hand": "no_detection",
+            "saliency": "detected",
+        },
+        exclusions=_recipe().exclusions,
+    )
+    renderer = FakeRenderer()
+
+    results = process_batch(
+        [source],
+        tmp_path / "out",
+        renderer,
+        assets=assets,
+        recipe_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("called")),
+        replay_record=record,
+    )
+
+    assert results[0].success is False
+    assert results[0].error is not None
+    assert "water-stain-01" in results[0].error
+    assert renderer.calls == []
 
 
 def test_fresh_batch_revalidates_the_staged_source_before_rendering(
@@ -271,7 +341,10 @@ def test_replay_rejects_source_and_asset_mismatches_before_rendering(
             else hashlib.sha256(source.read_bytes()).hexdigest()
         ),
         source_size=Size(width=10, height=20),
-        asset_sha256={"dry-rub-neutral-gray": "b" * 64},
+        asset_sha256={
+            "dry-rub-neutral-gray": "b" * 64,
+            "water-stain-01": hashlib.sha256(b"water").hexdigest(),
+        },
         bridge_schema_version=1,
         recipe_schema_version=1,
         analyzer_version="1.2.3",
@@ -286,7 +359,10 @@ def test_replay_rejects_source_and_asset_mismatches_before_rendering(
     if mismatch == "source":
         record = replace(
             record,
-            asset_sha256={"dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest()},
+            asset_sha256={
+                "dry-rub-neutral-gray": hashlib.sha256(b"brush").hexdigest(),
+                "water-stain-01": hashlib.sha256(b"water").hexdigest(),
+            },
         )
     renderer = FakeRenderer()
 
@@ -458,6 +534,52 @@ def test_publish_output_set_restores_outputs_when_backup_replacement_fails(
         publish_output_set(staged, final)
 
     assert [path.read_bytes() for path in final] == [
+        b"old-png",
+        b"old-xcf",
+        b"old-recipe",
+    ]
+
+
+def test_publish_output_set_retains_backups_when_restore_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from gimp_weathered_photo_plugin.batch import publish_output_set
+
+    final: tuple[Path, Path, Path] = (
+        tmp_path / "print-worn.png",
+        tmp_path / "print-worn.xcf",
+        tmp_path / "print-worn.recipe.json",
+    )
+    staged: tuple[Path, Path, Path] = (
+        tmp_path / "staged.png",
+        tmp_path / "staged.xcf",
+        tmp_path / "staged.recipe.json",
+    )
+    for path, content in zip(
+        final, (b"old-png", b"old-xcf", b"old-recipe"), strict=True
+    ):
+        path.write_bytes(content)
+    for path, content in zip(
+        staged, (b"new-png", b"new-xcf", b"new-recipe"), strict=True
+    ):
+        path.write_bytes(content)
+    original_replace = Path.replace
+
+    def fail_publication_and_restore(self: Path, target: Path) -> Path:
+        if self == staged[1]:
+            raise OSError("publication failed")
+        if self.parent.name.startswith(".vezor-publish-backup-") and target == final[0]:
+            raise OSError("restore failed")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", fail_publication_and_restore)
+
+    with pytest.raises(RuntimeError, match="rollback failed"):
+        publish_output_set(staged, final)
+
+    backups = list(tmp_path.glob(".vezor-publish-backup-*"))
+    assert len(backups) == 1
+    assert [(backups[0] / str(index)).read_bytes() for index in range(3)] == [
         b"old-png",
         b"old-xcf",
         b"old-recipe",
