@@ -25,11 +25,13 @@ burn blobs.
 ## Automated Protection Analysis
 
 The plug-in process uses the official `mediapipe` package for face and hand
-landmarks and the official `opencv-python` package for image decoding,
-preprocessing, saliency, and soft-mask composition. No custom ONNX models are
-permitted. These packages only calculate protection fields; they do not alter
-the rendered image. GIMP receives the resulting organic masks and executes all
-visual work.
+landmarks and the official `opencv-contrib-python` package for image decoding,
+preprocessing, `cv2.saliency`, and soft-mask composition. This is the sole
+direct `cv2` wheel: MediaPipe also declares the contrib distribution, so the
+resolver must install one compatible provider rather than `opencv-python` plus
+`opencv-contrib-python`. No custom ONNX models are permitted. These packages
+only calculate protection fields; they do not alter the rendered image. GIMP
+receives the resulting organic masks and executes all visual work.
 
 Protection has three inputs: detected face landmarks, detected hand landmarks,
 and a soft emotional-center field produced from visual saliency plus the image
@@ -47,9 +49,10 @@ operation fails before creating outputs and identifies the missing component.
 Pure-Python modules own typed recipe data, asset resolution, protection-map
 calculation, stochastic planning, metadata serialization, and batch
 orchestration. They are testable in CI without importing `gi` or launching a
-desktop GIMP instance. A narrow `gimp_adapter` module is the only module that
-imports GIMP bindings; it turns a planned recipe into editable GIMP layers,
-masks, brushes, transforms, blend modes, local blur, PNG export, and XCF save.
+desktop GIMP instance. A narrow `gimp_host` module is the only module that
+imports GIMP bindings. It contains both procedure registration and rendering,
+and turns a planned recipe into editable GIMP layers, masks, brushes,
+transforms, blend modes, local blur, PNG export, and XCF save.
 
 The default planner obtains fresh entropy from the operating system for every
 render. It records the resolved seed and every chosen asset and transform in
@@ -58,7 +61,10 @@ that saved recipe; filenames never affect randomization.
 
 ## Outputs and Batch Semantics
 
-For each accepted input, batch processing writes beside the chosen output stem:
+For each accepted input, batch processing resolves assets and a recipe before
+calling the GIMP renderer. It passes both objects directly to the renderer,
+then atomically publishes the sidecar only after PNG and XCF creation succeed.
+It writes beside the chosen output stem:
 
 - `<stem>-worn.png` — flattened export that retains original dimensions and
   alpha values.
@@ -71,7 +77,23 @@ The batch operation processes each file independently, returns a per-file
 result, and does not overwrite an existing output unless `--overwrite` is
 passed. A failure for one input is reported without hiding failures from later
 inputs. Missing assets are preflighted before any output is produced for that
-input.
+input. The public CLI accepts `--replay-recipe PATH` to request the only
+deterministic path; otherwise it always creates a fresh recipe.
+
+## Curated Asset Contract
+
+The package-owned library is declared by `assets/worn-print-manifest.json` and
+contains these stable IDs and relative paths: `dry-rub-neutral-gray`
+(`brushes/dry-rub-neutral-gray.gbr`), `dry-rub-umber`
+(`brushes/dry-rub-umber.gbr`), `mottled-sepia`
+(`brushes/mottled-sepia.gbr`), `water-stain-01`
+(`masks/water-stain-01.png`), `water-stain-02`
+(`masks/water-stain-02.png`), and `water-stain-03`
+(`masks/water-stain-03.png`). The adapter loads `.gbr` files as GIMP brush
+resources and uses the PNGs only as local layer-mask sources. Unit tests use a
+temporary manifest and zero-content placeholder files; native smoke requires
+the licensed final assets. The final source/licensing for these assets must be
+approved before native-proof rendering.
 
 ## Test Strategy
 
@@ -94,7 +116,7 @@ are rendered for visual approval after all local gates pass.
 
 - Keep `requires-python = ">=3.12"`; Python 3.12 is canonical locally and in CI.
 - Add only the approved direct production dependencies: `mediapipe` and
-  `opencv-python`; commit the updated `uv.lock`.
+  `opencv-contrib-python`; commit the updated `uv.lock`.
 - Preserve existing automation configuration unless a concrete defect requires
   a focused correction.
 - Do not require GIMP for unit tests or CI. Remote GitHub checks remain pending

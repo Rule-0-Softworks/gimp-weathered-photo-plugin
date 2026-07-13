@@ -6,13 +6,13 @@
 
 **Architecture:** Keep recipe planning, semantic protection analysis, asset resolution, and batch orchestration pure Python so they run in CI. Isolate every `gi.repository` call in one adapter that applies the resolved plan through native GIMP layers, masks, brushes, transforms, blend modes, and masked local blur.
 
-**Tech Stack:** Python 3.12+, uv, pytest/pytest-cov, Ruff, ty, GIMP 3 Python API, official `mediapipe`, official `opencv-python`
+**Tech Stack:** Python 3.12+, uv, pytest/pytest-cov, Ruff, ty, GIMP 3 Python API, official `mediapipe`, official `opencv-contrib-python`
 
 ## Global Constraints
 
 - Work only on `feature/initial-worn-image-pipeline-plugin`.
 - Keep `requires-python = ">=3.12"`; use Python 3.12 locally and in CI.
-- Add only `mediapipe` and `opencv-python` as direct production dependencies; commit `uv.lock`.
+- Add only `mediapipe` and `opencv-contrib-python` as direct production dependencies; commit `uv.lock`. Never install another `cv2` wheel family.
 - Do not use Pillow, custom ONNX models, generative image editing, Canva effects, or a global filter.
 - GIMP must perform all visual treatment operations. Do not add text, frames, borders, full-frame overlays, global tint/blur, rings, rectangular masks, or burn blobs.
 - Default renders use fresh OS entropy; deterministic replay is allowed only with an explicit saved recipe.
@@ -25,6 +25,9 @@
 
 - `src/gimp_weathered_photo_plugin/models.py`: immutable, serializable recipe,
   geometry, asset, and output data.
+- `src/gimp_weathered_photo_plugin/assets/worn-print-manifest.json`: exact
+  package-data map for the three `.gbr` brushes and three water-stain PNG masks
+  named in the design spec.
 - `src/gimp_weathered_photo_plugin/assets.py`: curated asset manifest and
   preflight resolution.
 - `src/gimp_weathered_photo_plugin/protection.py`: MediaPipe/OpenCV protection
@@ -33,8 +36,8 @@
   rejection, and explicit recipe replay.
 - `src/gimp_weathered_photo_plugin/metadata.py`: recipe JSON schema and source
   fingerprinting.
-- `src/gimp_weathered_photo_plugin/gimp_adapter.py`: sole GIMP API boundary.
-- `src/gimp_weathered_photo_plugin/plugin.py`: GIMP 3 procedure registration.
+- `src/gimp_weathered_photo_plugin/gimp_host.py`: sole GIMP API boundary and
+  GIMP 3 procedure registration.
 - `src/gimp_weathered_photo_plugin/batch.py`: input discovery, preflight,
   result aggregation, and output naming.
 - `src/gimp_weathered_photo_plugin/__main__.py`: command validation and batch
@@ -62,7 +65,7 @@
   origin of `edge` or `corner`.
 - [ ] Run `uv run pytest tests/test_models.py -v`; observe import failure.
 - [ ] Add `mediapipe>=0.10.35,<0.11` and
-  `opencv-python>=5.0.0.93,<5.1` to `[project].dependencies`, run
+  `opencv-contrib-python>=5.0.0.93,<5.1` to `[project].dependencies`, run
   `uv lock`, and implement the frozen dataclasses and validation.
 - [ ] Re-run the focused test; expect all tests to pass. Run
   `uv run ruff format .`, `uv run ruff check .`, and `uv run ty check`.
@@ -78,19 +81,26 @@
 - Create: `tests/test_planning.py`
 
 **Interfaces:**
-- `resolve_assets(root: Path) -> dict[str, Path]` returns only declared dry-rub,
-  sepia, and water-stain asset IDs or raises `MissingBrushAssetsError(ids)`.
+- `resolve_assets(root: Path) -> dict[str, Path]` validates exactly these IDs:
+  `dry-rub-neutral-gray`, `dry-rub-umber`, `mottled-sepia`, `water-stain-01`,
+  `water-stain-02`, and `water-stain-03`; it returns their packaged paths or
+  raises `MissingBrushAssetsError(ids)`.
 - `plan_treatment(size: Size, exclusion: SoftExclusion, assets: Mapping[str,
   Path], recipe: TreatmentRecipe | None = None) -> TreatmentRecipe` creates a
   fresh recipe when `recipe is None`, otherwise validates and returns the
   supplied replay recipe.
 
-- [ ] Write failing tests for missing asset IDs, six default plans with at least
+- [ ] Write a failing asset test with a temporary manifest and one placeholder
+  file per declared path, then assert an absent `water-stain-03` produces its
+  exact ID in `MissingBrushAssetsError`. Write failing planning tests for six
+  default plans with at least
   two distinct resolved seeds/mark sequences, explicit replay equality, and
   candidate marks whose anchors lie in the configured edge band and do not
   exceed permitted soft-exclusion overlap.
 - [ ] Run focused tests and observe collection/import failures.
-- [ ] Implement a curated manifest, asset preflight, `secrets.randbits(128)`
+- [ ] Add `assets/worn-print-manifest.json` with the exact IDs/relative paths
+  from the design spec, declare its six files as package data, implement
+  preflight, `secrets.randbits(128)`
   default entropy, bounded random scale/rotation/opacity/density/direction,
   weighted rejection sampling, and a hard maximum mark count. Do not inspect
   filenames for entropy.
@@ -105,7 +115,7 @@
 
 **Interfaces:**
 - `build_protection_field(image: npt.NDArray[np.uint8]) -> SoftExclusion`
-  combines official MediaPipe face/hand landmarks with OpenCV saliency and a
+  combines official MediaPipe face/hand landmarks with `cv2.saliency` and a
   feathered center field.
 - `overlap_fraction(mark: Mark, exclusion: SoftExclusion) -> float` supplies
   planning rejection without a GIMP dependency.
@@ -134,35 +144,40 @@
 
 **Interfaces:**
 - `write_recipe(path: Path, recipe: TreatmentRecipe, source: Path) -> Path`
-  writes versioned UTF-8 JSON after image rendering succeeds.
-- `process_batch(inputs: Sequence[Path], output_dir: Path, renderer:
-  Renderer, *, overwrite: bool = False) -> list[BatchResult]` invokes a
-  renderer per input and reports success/failure independently.
-- `Renderer.render(source: Path, png: Path, xcf: Path, recipe_path: Path) ->
-  None` is the dependency-injected host boundary.
+  atomically writes versioned UTF-8 JSON only after its matching render
+  succeeds.
+- `process_batch(inputs: Sequence[Path], output_dir: Path, renderer: Renderer,
+  *, replay_recipe: Path | None = None, overwrite: bool = False) ->
+  list[BatchResult]` preflights assets, creates or loads a recipe, passes it to
+  the renderer, then writes its sidecar per input and reports failures
+  independently.
+- `Renderer.render(source: Path, png: Path, xcf: Path, recipe:
+  TreatmentRecipe, assets: Mapping[str, Path]) -> None` is the
+  dependency-injected host boundary.
 
-- [ ] Write failing tests for source SHA-256 and recipe data in JSON, recipe
-  replay loading, PNG/XCF/JSON naming, no overwrite by default, one failed
-  input not suppressing later inputs, and zero renderer calls when assets fail
-  preflight.
+- [ ] Write failing tests for source SHA-256 and recipe data in JSON, exact
+  recipe and resolved assets received by the fake renderer before sidecar
+  creation, `--replay-recipe` loading, PNG/XCF/JSON naming, no overwrite by
+  default, one failed input not suppressing later inputs, and zero renderer
+  calls when assets fail preflight.
 - [ ] Run focused tests and observe RED.
-- [ ] Implement atomic sidecar creation after renderer success, deterministic
-  output naming, a narrow CLI parser, and a fake-renderer-friendly batch
-  protocol. The standalone CLI must document that it invokes a configured GIMP
-  batch host rather than emulating image treatment itself.
+- [ ] Implement recipe-before-render ordering, atomic sidecar creation after
+  renderer success, deterministic output naming, a narrow CLI parser with
+  `--replay-recipe PATH`, and a fake-renderer-friendly batch protocol. The
+  standalone CLI must document that it invokes a configured GIMP batch host
+  rather than emulating image treatment itself.
 - [ ] Run focused tests and quality checks; expect GREEN.
 - [ ] Inspect staged diff and commit `feat: add batch recipe workflow`.
 
 ### Task 5: Render the approved recipe through native GIMP operations
 
 **Files:**
-- Create: `src/gimp_weathered_photo_plugin/gimp_adapter.py`
-- Create: `src/gimp_weathered_photo_plugin/plugin.py`
+- Create: `src/gimp_weathered_photo_plugin/gimp_host.py`
 - Create: `tests/test_gimp_adapter_contract.py`
 
 **Interfaces:**
-- `GimpRenderer.render(source, png, xcf, recipe_path) -> None` is the concrete
-  `Renderer` used only by a GIMP host.
+- `GimpRenderer.render(source, png, xcf, recipe, assets) -> None` is the
+  concrete `Renderer` used only by a GIMP host.
 - `apply_recipe(image, recipe, assets) -> None` creates editable named layers
   and masks and never mutates the source layer pixels.
 
@@ -173,11 +188,12 @@
   local mask; final export restores exact original alpha and dimensions; no
   global filter/tint/blur call is issued.
 - [ ] Run the contract tests and observe RED without importing `gi` in CI.
-- [ ] Implement a small protocol-backed adapter with the sole lazy
-  `gi.repository` import. Register a GIMP 3 image procedure that accepts a
-  recipe/output configuration, calls `apply_recipe`, saves XCF, and exports
-  PNG. Use GIMP-native layers, masks, brush resources, transforms, blend modes,
-  and local Gaussian blur.
+- [ ] Implement `gimp_host.py` as the sole lazy `gi.repository` import module.
+  It contains the GIMP 3 procedure registration and the protocol-backed
+  `GimpRenderer`. The procedure receives a parsed recipe, resolves package
+  assets, calls `apply_recipe`, saves XCF, and exports PNG. Use GIMP-native
+  layers, masks, brush resources, transforms, blend modes, and local Gaussian
+  blur.
 - [ ] Run fake-adapter tests plus all static checks. Verify `rg -n
   'PIL|Pillow|onnx|global.*blur|global.*tint' src tests` finds no forbidden
   treatment engine or custom ONNX usage.
