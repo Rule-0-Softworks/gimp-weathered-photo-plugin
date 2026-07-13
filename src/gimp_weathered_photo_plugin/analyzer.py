@@ -225,8 +225,8 @@ def _configure_matplotlib_cache(source: Path) -> None:
     if "MPLCONFIGDIR" in os.environ:
         return
     cache_directory = source.parent / ".matplotlib"
-    cache_directory.mkdir(exist_ok=True)
-    os.environ["MPLCONFIGDIR"] = str(cache_directory)
+    cache_directory.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(cache_directory))
 
 
 def _load_cv2() -> Any:

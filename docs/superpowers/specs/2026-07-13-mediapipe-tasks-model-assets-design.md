@@ -128,18 +128,20 @@ stored in fresh render provenance so a result can be audited later.
 - Provider tests use fake Tasks results to verify normalized landmark mapping.
 - Existing protection tests continue to inject landmark detectors and remain
   independent of MediaPipe.
-- A real standard-CPython smoke test loads both bundled models, creates both
-  Tasks detectors, and processes a small fixed image without requiring GIMP.
-  This test is the regression gate for package/API/model compatibility.
+- `test_real_tasks_models_load_and_process_fixed_image` loads both bundled
+  models, creates both Tasks detectors, and processes `model-smoke.png` without
+  requiring GIMP. This test is the regression gate for package/API/model
+  compatibility.
 - The analyzer subprocess test proves the configured standard CPython invokes
   the module with an argument list and returns protocol-valid JSON.
-- Package build inspection proves both models and both JSON records are present
-  in the wheel.
+- `test_built_wheel_includes_verified_mediapipe_model_assets` runs `uv build`
+  and proves both models and both JSON records are present in the wheel.
 
 ## Update Procedure
 
 An operator updates models manually in a reviewed change. The change must
 replace the official asset, update the manifest digest/size/version/source,
-update the advisory record, run the real smoke test, and record any license or
-attribution change. Runtime network fetching and automatic updates are
-prohibited.
+update the advisory record, run
+`test_real_tasks_models_load_and_process_fixed_image`, verify the wheel
+contents, commit the reviewed change, and record any license or attribution
+change. Runtime network fetching and automatic updates are prohibited.

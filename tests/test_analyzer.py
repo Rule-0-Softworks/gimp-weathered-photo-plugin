@@ -16,6 +16,10 @@ from gimp_weathered_photo_plugin.bridge_protocol import (
 )
 from gimp_weathered_photo_plugin.model_assets import ModelResolver
 from gimp_weathered_photo_plugin.models import Point, Size, SoftExclusion
+from gimp_weathered_photo_plugin.protection import Image
+from gimp_weathered_photo_plugin.tasks_landmarks import (
+    MediaPipeTasksLandmarkProvider,
+)
 
 
 class FakeAdapter:
@@ -85,6 +89,40 @@ def test_analyzer_keeps_matplotlib_cache_with_the_staged_source(
     analyze_request(_request(source), FakeAdapter())
 
     assert Path(os.environ["MPLCONFIGDIR"]) == source.parent / ".matplotlib"
+
+
+def test_analyzer_creates_a_nested_matplotlib_cache_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from gimp_weathered_photo_plugin.analyzer import _configure_matplotlib_cache
+
+    source = tmp_path / "staged" / "source.png"
+    monkeypatch.delenv("MPLCONFIGDIR", raising=False)
+
+    _configure_matplotlib_cache(source)
+
+    assert (source.parent / ".matplotlib").is_dir()
+
+
+def test_real_tasks_models_load_and_process_fixed_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import cv2
+
+    cache = tmp_path / ".matplotlib"
+    cache.mkdir()
+    monkeypatch.setenv("MPLCONFIGDIR", str(cache))
+    image_path = Path(__file__).parent / "fixtures" / "model-smoke.png"
+    image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+    assert image is not None
+    with (
+        ModelResolver().resolve() as models,
+        MediaPipeTasksLandmarkProvider(models) as provider,
+    ):
+        faces = provider.detect_faces(cast(Image, image))
+        hands = provider.detect_hands(cast(Image, image))
+    assert isinstance(faces, tuple)
+    assert isinstance(hands, tuple)
 
 
 def test_analyzer_keeps_saliency_protection_when_no_face_or_hand_is_detected(

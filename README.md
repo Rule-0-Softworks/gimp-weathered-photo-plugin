@@ -46,6 +46,18 @@ uv run ty check
 The commands are shell-agnostic; replace the PowerShell prompt with your
 preferred terminal. The test command writes `coverage.xml` for Codecov.
 
+## Bundled MediaPipe model updates
+
+The application never fetches or upgrades bundled MediaPipe models. A `low`
+advisory warns and permits fresh rendering; `medium`, `high`, and `critical`
+advisories block fresh rendering.
+
+An operator updates a model manually in a reviewed change: replace the
+official file, update its manifest size, SHA-256 hash, version, and source,
+update the advisory record, run the compatibility smoke test, and commit the
+reviewed change. See the [MediaPipe Tasks model assets design](docs/superpowers/specs/2026-07-13-mediapipe-tasks-model-assets-design.md)
+for the complete pinned-asset contract.
+
 ## Batch rendering
 
 The command-line entry point runs GIMP's native batch host; it does not process
