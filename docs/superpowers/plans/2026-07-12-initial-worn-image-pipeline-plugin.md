@@ -85,10 +85,10 @@
   `dry-rub-neutral-gray`, `dry-rub-umber`, `mottled-sepia`, `water-stain-01`,
   `water-stain-02`, and `water-stain-03`; it returns their packaged paths or
   raises `MissingBrushAssetsError(ids)`.
-- `plan_treatment(size: Size, exclusion: SoftExclusion, assets: Mapping[str,
-  Path], recipe: TreatmentRecipe | None = None) -> TreatmentRecipe` creates a
-  fresh recipe when `recipe is None`, otherwise validates and returns the
-  supplied replay recipe.
+- `plan_treatment(size: Size, exclusions: Sequence[SoftExclusion], assets:
+  Mapping[str, Path], recipe: TreatmentRecipe | None = None) ->
+  TreatmentRecipe` creates a fresh recipe when `recipe is None`, otherwise
+  validates and returns the supplied replay recipe.
 
 - [ ] Write a failing asset test with a temporary manifest and one placeholder
   file per declared path, then assert an absent `water-stain-03` produces its
@@ -114,11 +114,11 @@
 - Create: `tests/test_protection.py`
 
 **Interfaces:**
-- `build_protection_field(image: npt.NDArray[np.uint8]) -> SoftExclusion`
-  combines official MediaPipe face/hand landmarks with `cv2.saliency` and a
-  feathered center field.
-- `overlap_fraction(mark: Mark, exclusion: SoftExclusion) -> float` supplies
-  planning rejection without a GIMP dependency.
+- `build_protection_regions(image: npt.NDArray[np.uint8]) ->
+  tuple[SoftExclusion, ...]` combines official MediaPipe face/hand landmarks
+  with `cv2.saliency` and a feathered center field.
+- `overlap_fraction(mark: Mark, exclusions: Sequence[SoftExclusion]) -> float`
+  supplies planning rejection without a GIMP dependency.
 
 - [ ] Write failing tests using mocked MediaPipe landmark results and small
   NumPy arrays: face/hand regions are protected, field edges are feathered,

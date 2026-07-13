@@ -35,10 +35,11 @@ receives the resulting organic masks and executes all visual work.
 
 Protection has three inputs: detected face landmarks, detected hand landmarks,
 and a soft emotional-center field produced from visual saliency plus the image
-center. The resulting alpha-like field is feathered and irregular rather than
-a visible rectangular exclusion. Candidate marks must start on an edge/corner,
-remain sparse, and be rejected when their weighted overlap with the protection
-field exceeds the configured limit.
+center. It produces a sequence of overlapping feathered regions, combined only
+when evaluated for placement, rather than a visible rectangular exclusion.
+Candidate marks must start on an edge/corner, remain sparse, and be rejected
+when their weighted overlap with the composite protection field exceeds the
+configured limit.
 
 If MediaPipe cannot make a semantic detection, the saliency/center protection
 still applies. If the required packages or curated brush assets are absent, the
