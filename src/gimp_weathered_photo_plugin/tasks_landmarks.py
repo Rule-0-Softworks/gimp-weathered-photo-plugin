@@ -126,14 +126,14 @@ def _create_tasks_image(image: Image) -> object:
 
 
 def _to_tasks_rgb(image: Image) -> Image:
+    if image.ndim != 3 or image.shape[2] not in {3, 4}:
+        raise ValueError("MediaPipe Tasks requires a three- or four-channel image")
     try:
         import cv2
     except ImportError as error:
         raise ProtectionDependencyError(
             "MediaPipe Tasks requires opencv-contrib-python"
         ) from error
-    if image.ndim != 3 or image.shape[2] not in {3, 4}:
-        raise ValueError("MediaPipe Tasks requires a three- or four-channel image")
     if image.shape[2] == 3:
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     else:
