@@ -1,0 +1,10 @@
+{
+  "assets": {
+    "dry-rub-neutral-gray": "brushes/dry-rub-neutral-gray.gbr",
+    "dry-rub-umber": "brushes/dry-rub-umber.gbr",
+    "mottled-sepia": "brushes/mottled-sepia.gbr",
+    "water-stain-01": "masks/water-stain-01.png",
+    "water-stain-02": "masks/water-stain-02.png",
+    "water-stain-03": "masks/water-stain-03.png"
+  }
+}
