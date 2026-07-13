@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "id": "face-landmarker",
+      "task_type": "face_landmarker",
+      "source_url": "https://storage.googleapis.com/download/storage/v1/b/mediapipe-models/o/face_landmarker%2Fface_landmarker%2Ffloat16%2Flatest%2Fface_landmarker.task?generation=1683136941468629&alt=media",
+      "version": "gcs-generation-1683136941468629",
+      "bytes": 3758596,
+      "sha256": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+      "path": "models/face_landmarker.task",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "hand-landmarker",
+      "task_type": "hand_landmarker",
+      "source_url": "https://storage.googleapis.com/download/storage/v1/b/mediapipe-models/o/hand_landmarker%2Fhand_landmarker%2Ffloat16%2Flatest%2Fhand_landmarker.task?generation=1682480005356399&alt=media",
+      "version": "gcs-generation-1682480005356399",
+      "bytes": 7819105,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "path": "models/hand_landmarker.task",
+      "license": "Apache-2.0"
+    }
+  ]
+}
