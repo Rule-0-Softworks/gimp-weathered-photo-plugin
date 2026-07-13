@@ -127,9 +127,10 @@ class FakeBridge:
             "saliency": "detected",
         }
         return AnalysisResponse(
-            bridge_schema_version=1,
+            bridge_schema_version=2,
             source_sha256=request.source_sha256,
             detectors=detectors,
+            adapter_configuration={"advisories.schema_version": "1"},
             exclusions=_recipe().exclusions,
         )
 

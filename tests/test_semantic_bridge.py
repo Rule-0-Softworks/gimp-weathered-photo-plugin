@@ -9,15 +9,18 @@ import pytest
 from gimp_weathered_photo_plugin.bridge_protocol import AnalysisRequest, Size
 
 
-def _response(source_sha256: str) -> str:
+def _response(source_sha256: str, *, bridge_schema_version: int = 2) -> str:
     return json.dumps(
         {
-            "bridge_schema_version": 1,
+            "bridge_schema_version": bridge_schema_version,
             "source_sha256": source_sha256,
             "detectors": {
                 "face": "no_detection",
                 "hand": "no_detection",
                 "saliency": "detected",
+            },
+            "adapter_configuration": {
+                "advisories.schema_version": "1",
             },
             "exclusions": [
                 {
@@ -61,7 +64,7 @@ def test_bridge_uses_argument_list_and_validates_fingerprint(
     source = tmp_path / "source.png"
     source.write_bytes(b"source")
     request = AnalysisRequest(
-        bridge_schema_version=1,
+        bridge_schema_version=2,
         source_path=source.resolve(),
         source_sha256=hashlib.sha256(b"source").hexdigest(),
         source_size=Size(10, 10),
@@ -103,7 +106,7 @@ def test_bridge_rejects_timeout_and_mismatched_response_fingerprint(
     source = tmp_path / "source.png"
     source.write_bytes(b"source")
     request = AnalysisRequest(
-        1, source.resolve(), hashlib.sha256(b"source").hexdigest(), Size(10, 10)
+        2, source.resolve(), hashlib.sha256(b"source").hexdigest(), Size(10, 10)
     )
 
     def timed_out(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -134,6 +137,16 @@ def test_bridge_rejects_timeout_and_mismatched_response_fingerprint(
     with pytest.raises(BridgeExecutionError, match="detector analysis failed"):
         bridge.analyze(request)
 
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, _response(request.source_sha256, bridge_schema_version=1), ""
+        ),
+    )
+    with pytest.raises(BridgeExecutionError, match="invalid JSON"):
+        bridge.analyze(request)
+
 
 def test_bridge_runs_the_real_analyzer_module_with_standard_cpython(
     tmp_path: Path,
@@ -145,7 +158,7 @@ def test_bridge_runs_the_real_analyzer_module_with_standard_cpython(
 
     source = tmp_path / "missing.png"
     request = AnalysisRequest(
-        1,
+        2,
         source.resolve(),
         "a" * 64,
         Size(2, 2),

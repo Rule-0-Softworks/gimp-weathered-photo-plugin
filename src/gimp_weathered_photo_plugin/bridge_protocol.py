@@ -8,9 +8,11 @@ from typing import Any, Literal, cast
 
 from gimp_weathered_photo_plugin.models import Size, SoftExclusion
 
-BRIDGE_SCHEMA_VERSION = 1
+BRIDGE_SCHEMA_VERSION = 2
 MAX_RESPONSE_BYTES = 64 * 1024
 MAX_EXCLUSIONS = 32
+MAX_ADAPTER_CONFIGURATION_ENTRIES = 16
+MAX_ADAPTER_CONFIGURATION_STRING_BYTES = 256
 DetectorStatus = Literal["detected", "no_detection", "disabled", "failed"]
 _DETECTORS = frozenset({"face", "hand", "saliency"})
 _STATUSES = frozenset({"detected", "no_detection", "disabled", "failed"})
@@ -47,6 +49,7 @@ class AnalysisResponse:
     bridge_schema_version: int
     source_sha256: str
     detectors: Mapping[str, DetectorStatus]
+    adapter_configuration: Mapping[str, str]
     exclusions: tuple[SoftExclusion, ...]
 
 
@@ -63,6 +66,9 @@ def parse_response_json(document: str) -> AnalysisResponse:
         version = payload["bridge_schema_version"]
         source_sha256 = payload["source_sha256"]
         detectors = _parse_detectors(payload["detectors"])
+        adapter_configuration = _parse_adapter_configuration(
+            payload["adapter_configuration"]
+        )
         exclusions_data = payload["exclusions"]
     except KeyError as error:
         raise BridgeProtocolError(
@@ -82,6 +88,7 @@ def parse_response_json(document: str) -> AnalysisResponse:
         bridge_schema_version=version,
         source_sha256=source_sha256,
         detectors=detectors,
+        adapter_configuration=adapter_configuration,
         exclusions=exclusions,
     )
 
@@ -98,6 +105,32 @@ def _parse_detectors(value: object) -> dict[str, DetectorStatus]:
         ):
             raise BridgeProtocolError("detectors contain an unsupported status")
         result[name] = cast(DetectorStatus, status)
+    return result
+
+
+def _parse_adapter_configuration(value: object) -> dict[str, str]:
+    if (
+        not isinstance(value, dict)
+        or not 1 <= len(value) <= MAX_ADAPTER_CONFIGURATION_ENTRIES
+    ):
+        raise BridgeProtocolError(
+            "adapter_configuration must contain 1 to 16 string entries"
+        )
+    result: dict[str, str] = {}
+    for key, entry in value.items():
+        if (
+            not isinstance(key, str)
+            or not key
+            or not isinstance(entry, str)
+            or not entry
+            or len(key.encode("utf-8")) > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
+            or len(entry.encode("utf-8")) > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
+        ):
+            raise BridgeProtocolError(
+                "adapter_configuration keys and values must be non-empty strings "
+                "of at most 256 UTF-8 bytes"
+            )
+        result[key] = entry
     return result
 
 

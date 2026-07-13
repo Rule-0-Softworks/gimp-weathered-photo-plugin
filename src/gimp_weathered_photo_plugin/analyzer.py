@@ -4,9 +4,10 @@ import hashlib
 import json
 import os
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from gimp_weathered_photo_plugin.bridge_protocol import (
     MAX_RESPONSE_BYTES,
@@ -15,11 +16,19 @@ from gimp_weathered_photo_plugin.bridge_protocol import (
     BridgeProtocolError,
     DetectorStatus,
 )
+from gimp_weathered_photo_plugin.model_assets import (
+    ModelAssetError,
+    ModelResolver,
+    ModelSecurityError,
+)
 from gimp_weathered_photo_plugin.models import Size, SoftExclusion
 from gimp_weathered_photo_plugin.protection import (
     Image,
     ProtectionDependencyError,
     build_protection_regions,
+)
+from gimp_weathered_photo_plugin.tasks_landmarks import (
+    MediaPipeTasksLandmarkProvider,
 )
 
 
@@ -31,37 +40,62 @@ class AnalyzerRequestError(ValueError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class AnalyzerResult:
+    detectors: Mapping[str, DetectorStatus]
+    exclusions: tuple[SoftExclusion, ...]
+    adapter_configuration: Mapping[str, str]
+
+
 class ProtectionAnalyzer(Protocol):
-    def analyze(
-        self, source: Path
-    ) -> tuple[Mapping[str, str], tuple[SoftExclusion, ...]]: ...
+    def analyze(self, source: Path) -> AnalyzerResult: ...
 
 
 class MediaPipeOpenCvAdapter:
-    def analyze(
-        self, source: Path
-    ) -> tuple[Mapping[str, str], tuple[SoftExclusion, ...]]:
+    def __init__(
+        self,
+        resolver: ModelResolver | None = None,
+        cv2_loader: Callable[[], Any] | None = None,
+    ) -> None:
+        self._resolver = resolver or ModelResolver()
+        self._cv2_loader = cv2_loader or _load_cv2
+
+    def analyze(self, source: Path) -> AnalyzerResult:
         try:
-            import cv2
-        except ImportError as error:
-            raise AnalyzerError("opencv-contrib-python is required") from error
-        image = cv2.imread(str(source), cv2.IMREAD_UNCHANGED)
-        if image is None:
-            raise AnalyzerError("source image is unreadable")
-        try:
-            exclusions = build_protection_regions(cast(Image, image))
-        except ProtectionDependencyError as error:
+            with self._resolver.resolve() as models:
+                try:
+                    cv2 = self._cv2_loader()
+                except ImportError as error:
+                    raise AnalyzerError("opencv-contrib-python is required") from error
+                image = cv2.imread(str(source), cv2.IMREAD_UNCHANGED)
+                if image is None:
+                    raise AnalyzerError("source image is unreadable")
+                with MediaPipeTasksLandmarkProvider(models) as provider:
+                    exclusions = build_protection_regions(
+                        cast(Image, image),
+                        face_detector=provider.detect_faces,
+                        hand_detector=provider.detect_hands,
+                    )
+        except (
+            ModelAssetError,
+            ModelSecurityError,
+            ProtectionDependencyError,
+        ) as error:
             raise AnalyzerError(str(error)) from error
+        except AnalyzerError:
+            raise
         except (TypeError, ValueError) as error:
             raise AnalyzerError("protection analysis failed") from error
         sources = {exclusion.source for exclusion in exclusions}
-        return (
-            {
-                "face": "detected" if "face" in sources else "no_detection",
-                "hand": "detected" if "hand" in sources else "no_detection",
-                "saliency": "detected",
-            },
-            exclusions,
+        detectors: dict[str, DetectorStatus] = {
+            "face": "detected" if "face" in sources else "no_detection",
+            "hand": "detected" if "hand" in sources else "no_detection",
+            "saliency": "detected",
+        }
+        return AnalyzerResult(
+            detectors=detectors,
+            exclusions=exclusions,
+            adapter_configuration=models.adapter_configuration,
         )
 
 
@@ -73,9 +107,9 @@ def analyze_request(
         != request.source_sha256
     ):
         raise AnalyzerError("source fingerprint mismatch")
-    os.environ["MPLCONFIGDIR"] = str(request.source_path.parent / ".matplotlib")
-    detectors, exclusions = adapter.analyze(request.source_path)
-    validated = _validate_detectors(detectors)
+    _configure_matplotlib_cache(request.source_path)
+    result = adapter.analyze(request.source_path)
+    validated = _validate_detectors(result.detectors)
     failed = next(
         (name for name, status in validated.items() if status == "failed"), None
     )
@@ -87,7 +121,8 @@ def analyze_request(
         bridge_schema_version=request.bridge_schema_version,
         source_sha256=request.source_sha256,
         detectors=validated,
-        exclusions=exclusions,
+        adapter_configuration=result.adapter_configuration,
+        exclusions=result.exclusions,
     )
 
 
@@ -154,6 +189,7 @@ def _write_response(response: AnalysisResponse) -> None:
     document = json.dumps(
         {
             "bridge_schema_version": response.bridge_schema_version,
+            "adapter_configuration": dict(response.adapter_configuration),
             "detectors": dict(response.detectors),
             "exclusions": [exclusion.to_dict() for exclusion in response.exclusions],
             "source_sha256": response.source_sha256,
@@ -166,6 +202,8 @@ def _write_response(response: AnalysisResponse) -> None:
 
 
 def _analyzer_error_exit_code(error: AnalyzerError) -> int:
+    if isinstance(error.__cause__, (ModelAssetError, ModelSecurityError)):
+        return 3
     message = str(error).lower()
     if (
         "mediapipe is required" in message
@@ -178,6 +216,20 @@ def _analyzer_error_exit_code(error: AnalyzerError) -> int:
     ):
         return 4
     return 5
+
+
+def _configure_matplotlib_cache(source: Path) -> None:
+    if "MPLCONFIGDIR" in os.environ:
+        return
+    cache_directory = source.parent / ".matplotlib"
+    cache_directory.mkdir(exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = str(cache_directory)
+
+
+def _load_cv2() -> Any:
+    import cv2
+
+    return cv2
 
 
 def _write_diagnostic(message: str) -> None:
