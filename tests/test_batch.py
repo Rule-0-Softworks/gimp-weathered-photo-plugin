@@ -217,6 +217,31 @@ def test_fresh_batch_stages_analyzes_and_persists_the_complete_render_record(
     }
 
 
+def test_batch_rejects_duplicate_output_stems_before_rendering(tmp_path: Path) -> None:
+    first = tmp_path / "one" / "print.png"
+    second = tmp_path / "two" / "print.png"
+    first.parent.mkdir()
+    second.parent.mkdir()
+    first.write_bytes(_png())
+    second.write_bytes(_png())
+    renderer = FakeRenderer()
+
+    results = process_batch(
+        [first, second],
+        tmp_path / "out",
+        renderer,
+        assets=_assets(tmp_path),
+        recipe_factory=lambda size, exclusions, _assets: _recipe(),
+        semantic_bridge=FakeBridge(),
+        analyzer_version="1.2.3",
+        overwrite=True,
+    )
+
+    assert [result.success for result in results] == [False, False]
+    assert all(result.error == "duplicate output paths in batch" for result in results)
+    assert renderer.calls == []
+
+
 def test_fresh_record_persists_analyzer_returned_model_provenance(
     tmp_path: Path,
 ) -> None:

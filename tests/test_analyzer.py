@@ -104,6 +104,36 @@ def test_analyzer_creates_a_nested_matplotlib_cache_directory(
     assert (source.parent / ".matplotlib").is_dir()
 
 
+@pytest.mark.parametrize(
+    ("shape", "conversion"),
+    [((10, 20), "gray-to-bgr"), ((10, 20, 4), "bgra-to-bgr")],
+)
+def test_analyzer_normalizes_grayscale_and_bgra_images_before_protection(
+    shape: tuple[int, ...], conversion: str
+) -> None:
+    from gimp_weathered_photo_plugin.analyzer import _normalize_analysis_image
+
+    class ImageArray:
+        def __init__(self, dimensions: tuple[int, ...]) -> None:
+            self.ndim = len(dimensions)
+            self.shape = dimensions
+
+    image = ImageArray(shape)
+    calls: list[tuple[object, object]] = []
+
+    class Cv2:
+        COLOR_GRAY2BGR = "gray-to-bgr"
+        COLOR_BGRA2BGR = "bgra-to-bgr"
+
+        @staticmethod
+        def cvtColor(value: object, code: object) -> object:
+            calls.append((value, code))
+            return "normalized"
+
+    assert _normalize_analysis_image(Cv2(), image) == "normalized"
+    assert calls == [(image, conversion)]
+
+
 def test_real_tasks_models_load_and_process_fixed_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

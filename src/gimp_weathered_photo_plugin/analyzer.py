@@ -70,6 +70,7 @@ class MediaPipeOpenCvAdapter:
                 image = cv2.imread(str(source), cv2.IMREAD_UNCHANGED)
                 if image is None:
                     raise AnalyzerError("source image is unreadable")
+                image = _normalize_analysis_image(cv2, image)
                 with MediaPipeTasksLandmarkProvider(models) as provider:
                     exclusions = build_protection_regions(
                         cast(Image, image),
@@ -233,6 +234,16 @@ def _load_cv2() -> Any:
     import cv2
 
     return cv2
+
+
+def _normalize_analysis_image(cv2: Any, image: Any) -> Any:
+    if image.ndim == 2:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    if image.ndim == 3 and image.shape[2] == 4:
+        return cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+    if image.ndim == 3 and image.shape[2] == 3:
+        return image
+    raise AnalyzerError("source image has unsupported channel layout")
 
 
 def _write_diagnostic(message: str) -> None:

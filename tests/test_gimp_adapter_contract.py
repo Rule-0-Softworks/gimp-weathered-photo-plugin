@@ -107,19 +107,11 @@ def test_native_water_stain_transforms_density_scales_and_anchors_its_mask_asset
         pass
 
     class FloatingSelection:
-        def set_opacity(self, opacity: float) -> bool:
-            calls.append(("mask_opacity", opacity))
-            return True
-
-    class AssetLayer:
         def get_width(self) -> int:
             return 100
 
         def get_height(self) -> int:
             return 50
-
-        def set_opacity(self, opacity: float) -> None:
-            calls.append(("asset_opacity", opacity))
 
         def transform_2d(
             self,
@@ -145,6 +137,20 @@ def test_native_water_stain_transforms_density_scales_and_anchors_its_mask_asset
                     ),
                 )
             )
+
+        def set_opacity(self, opacity: float) -> bool:
+            calls.append(("mask_opacity", opacity))
+            return True
+
+    class AssetLayer:
+        def get_width(self) -> int:
+            return 100
+
+        def get_height(self) -> int:
+            return 50
+
+        def set_opacity(self, opacity: float) -> None:
+            calls.append(("asset_opacity", opacity))
 
     class AssetImage:
         def get_layers(self) -> list[AssetLayer]:
@@ -210,7 +216,8 @@ def test_native_water_stain_transforms_density_scales_and_anchors_its_mask_asset
     )
     assert transform_call in calls
     assert "paste" in calls
-    assert calls.index(transform_call) < copy_index
+    assert calls.index("paste") < calls.index(transform_call)
+    assert copy_index < calls.index("paste")
     assert ("mask_opacity", mark.density * 100.0) in calls
     assert any(isinstance(call, tuple) and call[0] == "anchor" for call in calls)
     assert calls[-1] == "delete_asset"
@@ -305,6 +312,15 @@ def test_native_water_stain_blur_layer_uses_the_mark_opacity() -> None:
             calls.append(("delete_asset", None))
 
     class PastedLayer:
+        def get_width(self) -> int:
+            return 100
+
+        def get_height(self) -> int:
+            return 100
+
+        def transform_2d(self, *_: object) -> None:
+            calls.append(("transform", None))
+
         def set_opacity(self, _: float) -> bool:
             return True
 
@@ -421,7 +437,7 @@ def test_native_layers_receive_a_source_alpha_mask_from_the_source_selection() -
     ]
 
 
-def test_native_brush_mark_converts_rotation_degrees_to_radians() -> None:
+def test_native_brush_mark_rotates_at_its_anchor_and_uses_family_color() -> None:
     from gimp_weathered_photo_plugin.gimp_host import _NativeGimpOperations
 
     calls: list[tuple[str, object]] = []
@@ -493,16 +509,22 @@ def test_native_brush_mark_converts_rotation_degrees_to_radians() -> None:
             "context_pop": staticmethod(lambda: None),
             "context_set_brush": staticmethod(lambda _: None),
             "context_set_brush_size": staticmethod(lambda _: None),
-            "context_set_brush_angle": staticmethod(lambda _: None),
-            "context_set_opacity": staticmethod(lambda _: None),
-            "context_set_foreground": staticmethod(lambda _: None),
+            "context_set_brush_angle": staticmethod(
+                lambda value: calls.append(("angle", value))
+            ),
+            "context_set_opacity": staticmethod(
+                lambda value: calls.append(("opacity", value))
+            ),
+            "context_set_foreground": staticmethod(
+                lambda value: calls.append(("foreground", value))
+            ),
             "pencil": staticmethod(lambda *_: None),
         },
     )
     Gegl = type(
         "Gegl",
         (),
-        {"Color": type("Color", (), {"new": staticmethod(lambda _: object())})},
+        {"Color": type("Color", (), {"new": staticmethod(lambda value: value)})},
     )
     mark = make_recipe().marks[0]
 
@@ -510,7 +532,88 @@ def test_native_brush_mark_converts_rotation_degrees_to_radians() -> None:
         mark, Path("C:/assets/dry-rub-neutral-gray.gbr")
     )
 
-    assert calls == [("rotate", (math.radians(mark.rotation_degrees), True, 0.0, 0.0))]
+    assert (
+        "rotate",
+        (math.radians(mark.rotation_degrees), True, 0.0, 0.0),
+    ) not in calls
+    assert calls.count(("angle", mark.direction_degrees + mark.rotation_degrees)) == 2
+    assert ("foreground", "#808080") in calls
+    assert ("opacity", 100.0) in calls
+
+
+def test_png_export_restores_the_source_alpha_after_flattening() -> None:
+    from gimp_weathered_photo_plugin.gimp_host import _save_png_preserving_source_alpha
+
+    calls: list[tuple[str, object]] = []
+
+    class SourceLayer:
+        def get_name(self) -> str:
+            return "Source (original)"
+
+    class FlattenedLayer:
+        def create_mask(self, kind: object) -> str:
+            calls.append(("create_mask", kind))
+            return "source-alpha-mask"
+
+        def add_mask(self, mask: str) -> None:
+            calls.append(("add_mask", mask))
+
+    class ExportImage:
+        def get_layers(self) -> list[SourceLayer]:
+            return [SourceLayer()]
+
+        def select_item(self, operation: object, layer: SourceLayer) -> None:
+            calls.append(("select_source", (operation, layer.get_name())))
+
+        def flatten(self) -> FlattenedLayer:
+            calls.append(("flatten", None))
+            return FlattenedLayer()
+
+        def delete(self) -> None:
+            calls.append(("delete", None))
+
+    class Image:
+        def duplicate(self) -> ExportImage:
+            calls.append(("duplicate", None))
+            return ExportImage()
+
+    class Selection:
+        @staticmethod
+        def none(_: ExportImage) -> None:
+            calls.append(("selection_none", None))
+
+    Gimp = type(
+        "Gimp",
+        (),
+        {
+            "RunMode": type("RunMode", (), {"NONINTERACTIVE": "noninteractive"}),
+            "ChannelOps": type("ChannelOps", (), {"REPLACE": "replace"}),
+            "AddMaskType": type("AddMaskType", (), {"SELECTION": "selection"}),
+            "Selection": Selection,
+            "file_save": staticmethod(lambda *_: calls.append(("save", None)) or True),
+        },
+    )
+
+    class Gio:
+        class File:
+            @staticmethod
+            def new_for_path(path: str) -> str:
+                return path
+
+    _save_png_preserving_source_alpha(
+        Image(), SourceLayer(), Gimp, Gio, Path("C:/out/result.png")
+    )
+
+    assert calls == [
+        ("duplicate", None),
+        ("select_source", ("replace", "Source (original)")),
+        ("flatten", None),
+        ("create_mask", "selection"),
+        ("add_mask", "source-alpha-mask"),
+        ("selection_none", None),
+        ("save", None),
+        ("delete", None),
+    ]
 
 
 def test_interactive_request_parses_a_recipe_and_absolute_asset_map(

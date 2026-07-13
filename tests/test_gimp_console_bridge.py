@@ -1,5 +1,6 @@
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -17,6 +18,18 @@ def temporary_configuration_root(tmp_path: Path, monkeypatch) -> None:
     import gimp_weathered_photo_plugin.gimp_console_bridge as bridge_module
 
     monkeypatch.setattr(bridge_module, "_TEMP_ROOT", tmp_path / "project-temp")
+
+
+def test_console_bridge_default_temp_root_is_host_portable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import gimp_weathered_photo_plugin.gimp_console_bridge as bridge_module
+
+    monkeypatch.undo()
+
+    assert Path(tempfile.gettempdir()) / "gimp-weathered-photo-plugin" == (
+        bridge_module._TEMP_ROOT
+    )
 
 
 def _assets(tmp_path: Path) -> dict[str, Path]:

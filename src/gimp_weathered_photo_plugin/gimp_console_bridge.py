@@ -10,9 +10,7 @@ from pathlib import Path
 
 from gimp_weathered_photo_plugin.models import TreatmentRecipe
 
-_TEMP_ROOT = Path(
-    r"C:\Projects\Rule0Softworks\project\tmp\gimp-weathered-photo-plugin-temp"
-)
+_TEMP_ROOT = Path(tempfile.gettempdir()) / "gimp-weathered-photo-plugin"
 
 
 class GimpConsoleError(RuntimeError):

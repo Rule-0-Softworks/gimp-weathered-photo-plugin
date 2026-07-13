@@ -123,13 +123,7 @@ def run_console_request(request_path: str) -> None:
             None,
         ):
             raise RuntimeError("GIMP could not save the staged XCF")
-        if not Gimp.file_save(
-            Gimp.RunMode.NONINTERACTIVE,
-            image,
-            Gio.File.new_for_path(str(request.png)),
-            None,
-        ):
-            raise RuntimeError("GIMP could not export the staged PNG")
+        _save_png_preserving_source_alpha(image, layers[0], Gimp, Gio, request.png)
     finally:
         image.delete()
 
@@ -145,6 +139,33 @@ def _load_gimp() -> tuple[Any, Any, Any]:
 
     Gegl.init(None)
     return Gimp, Gegl, Gio
+
+
+def _save_png_preserving_source_alpha(
+    image: Any, source: Any, gimp: Any, gio: Any, output: Path
+) -> None:
+    export_image = image.duplicate()
+    try:
+        source_name = source.get_name()
+        export_source = next(
+            layer
+            for layer in export_image.get_layers()
+            if layer.get_name() == source_name
+        )
+        export_image.select_item(gimp.ChannelOps.REPLACE, export_source)
+        flattened = export_image.flatten()
+        alpha_mask = flattened.create_mask(gimp.AddMaskType.SELECTION)
+        flattened.add_mask(alpha_mask)
+        gimp.Selection.none(export_image)
+        if not gimp.file_save(
+            gimp.RunMode.NONINTERACTIVE,
+            export_image,
+            gio.File.new_for_path(str(output)),
+            None,
+        ):
+            raise RuntimeError("GIMP could not export the staged PNG")
+    finally:
+        export_image.delete()
 
 
 class _NativeGimpOperations:
@@ -171,7 +192,6 @@ class _NativeGimpOperations:
         self._paint_with_brush(layer, mark, asset)
         self._paint_mask_with_brush(mask, mark, asset)
         self._apply_exclusions(mask)
-        layer.transform_rotate(math.radians(mark.rotation_degrees), True, 0.0, 0.0)
         layer.set_mode(
             self._gimp.LayerMode.MULTIPLY
             if mark.family == "mottled_sepia"
@@ -231,14 +251,19 @@ class _NativeGimpOperations:
         self._gimp.context_push()
         try:
             self._gimp.context_set_brush(brush)
+            self._gimp.context_set_foreground(
+                self._gegl.Color.new(_foreground_for_mark(mark))
+            )
             self._gimp.context_set_brush_size(
                 max(
                     1.0,
                     min(self._image.get_width(), self._image.get_height()) * mark.scale,
                 )
             )
-            self._gimp.context_set_brush_angle(mark.direction_degrees)
-            self._gimp.context_set_opacity(mark.opacity * 100.0)
+            self._gimp.context_set_brush_angle(
+                mark.direction_degrees + mark.rotation_degrees
+            )
+            self._gimp.context_set_opacity(100.0)
             self._gimp.pencil(
                 layer,
                 [
@@ -263,7 +288,9 @@ class _NativeGimpOperations:
                     min(self._image.get_width(), self._image.get_height()) * mark.scale,
                 )
             )
-            self._gimp.context_set_brush_angle(mark.direction_degrees)
+            self._gimp.context_set_brush_angle(
+                mark.direction_degrees + mark.rotation_degrees
+            )
             self._gimp.context_set_opacity(mark.density * 100.0)
             self._gimp.pencil(
                 mask,
@@ -290,15 +317,6 @@ class _NativeGimpOperations:
             )
             asset_extent = max(asset_layer.get_width(), asset_layer.get_height())
             scale = target_size / asset_extent
-            asset_layer.transform_2d(
-                asset_layer.get_width() / 2.0,
-                asset_layer.get_height() / 2.0,
-                scale,
-                scale,
-                math.radians(mark.rotation_degrees),
-                mark.anchor.x * self._image.get_width(),
-                mark.anchor.y * self._image.get_height(),
-            )
             if not self._gimp.edit_copy([asset_layer]):
                 raise RuntimeError(f"GIMP could not load water-stain mask {asset.stem}")
             pasted = self._gimp.edit_paste(mask, False)
@@ -306,11 +324,21 @@ class _NativeGimpOperations:
                 raise RuntimeError(
                     f"GIMP could not paste water-stain mask {asset.stem}"
                 )
-            if not pasted[0].set_opacity(mark.density * 100.0):
+            floating = pasted[0]
+            floating.transform_2d(
+                floating.get_width() / 2.0,
+                floating.get_height() / 2.0,
+                scale,
+                scale,
+                math.radians(mark.rotation_degrees),
+                mark.anchor.x * self._image.get_width(),
+                mark.anchor.y * self._image.get_height(),
+            )
+            if not floating.set_opacity(mark.density * 100.0):
                 raise RuntimeError(
                     f"GIMP could not set water-stain mask density {asset.stem}"
                 )
-            if not self._gimp.floating_sel_anchor(pasted[0]):
+            if not self._gimp.floating_sel_anchor(floating):
                 raise RuntimeError(
                     f"GIMP could not anchor water-stain mask {asset.stem}"
                 )
@@ -339,6 +367,14 @@ class _NativeGimpOperations:
             )
             mask.edit_clear()
         self._gimp.Selection.none(self._image)
+
+
+def _foreground_for_mark(mark: Mark) -> str:
+    colors = {"dry_rub": "#808080", "mottled_sepia": "#704214"}
+    try:
+        return colors[mark.family]
+    except KeyError as error:
+        raise ValueError(f"mark family {mark.family!r} does not use a brush") from error
 
 
 def main() -> None:

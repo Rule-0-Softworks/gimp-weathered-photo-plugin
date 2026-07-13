@@ -97,7 +97,9 @@ def test_codecov_coverage_status_policy_allows_small_project_regressions() -> No
     project = codecov["coverage"]["status"]["project"]["default"]
     assert project["target"] == "auto"
     assert project["threshold"] == "0.5%"
-    assert codecov["coverage"]["status"]["patch"]["default"]["target"] == "75%"
+    patch = codecov["coverage"]["status"]["patch"]["default"]
+    assert patch["target"] == "75%"
+    assert patch["threshold"] == "0.5%"
 
 
 def test_release_please_json_uses_python_manifest_mode() -> None:

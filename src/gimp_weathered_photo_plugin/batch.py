@@ -79,9 +79,22 @@ def process_batch(
         semantic_bridge = None
     record = _load_replay_record(replay_record)
     output_dir.mkdir(parents=True, exist_ok=True)
+    output_sets = [_output_paths(source, output_dir) for source in inputs]
+    duplicate_indices = _duplicate_output_indices(output_sets)
     results: list[BatchResult] = []
-    for source in inputs:
-        png, xcf, recipe_path = _output_paths(source, output_dir)
+    for index, source in enumerate(inputs):
+        png, xcf, recipe_path = output_sets[index]
+        if index in duplicate_indices:
+            results.append(
+                BatchResult(
+                    source,
+                    png,
+                    xcf,
+                    recipe_path,
+                    "duplicate output paths in batch",
+                )
+            )
+            continue
         if not overwrite and any(path.exists() for path in (png, xcf, recipe_path)):
             results.append(
                 BatchResult(
@@ -316,6 +329,20 @@ def _output_paths(source: Path, output_dir: Path) -> tuple[Path, Path, Path]:
         stem.with_suffix(".xcf"),
         stem.with_suffix(".recipe.json"),
     )
+
+
+def _duplicate_output_indices(
+    output_sets: Sequence[tuple[Path, Path, Path]],
+) -> set[int]:
+    indices_by_output: dict[tuple[Path, Path, Path], list[int]] = {}
+    for index, output_set in enumerate(output_sets):
+        indices_by_output.setdefault(output_set, []).append(index)
+    return {
+        index
+        for indices in indices_by_output.values()
+        if len(indices) > 1
+        for index in indices
+    }
 
 
 def _staged_output_paths(directory: Path) -> tuple[Path, Path, Path]:
