@@ -25,9 +25,12 @@ def test_package_includes_verified_mediapipe_model_assets() -> None:
         assert all(path.is_file() for path in models.paths.values())
 
 
-def test_built_wheel_includes_verified_mediapipe_model_assets() -> None:
-    subprocess.run(["uv", "build"], check=True)
-    wheel_path = next(Path("dist").glob("*.whl"))
+def test_built_wheel_includes_verified_mediapipe_model_assets(tmp_path: Path) -> None:
+    output_directory = tmp_path / "wheel-output"
+    subprocess.run(["uv", "build", "--out-dir", str(output_directory)], check=True)
+    wheel_paths = list(output_directory.glob("*.whl"))
+    assert len(wheel_paths) == 1
+    wheel_path = wheel_paths[0]
 
     with zipfile.ZipFile(wheel_path) as wheel:
         members = set(wheel.namelist())
