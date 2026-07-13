@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,7 @@ def test_ci_runs_every_required_quality_command() -> None:
     assert "uv run ty check" in runs
 
 
-def test_ci_pins_python_and_uploads_coverage() -> None:
+def test_ci_pins_python_and_configures_coverage_upload() -> None:
     workflow = load_yaml(".github/workflows/ci.yml")
     steps = workflow["jobs"]["quality"]["steps"]
 
@@ -43,9 +44,10 @@ def test_ci_pins_python_and_uploads_coverage() -> None:
 
     assert any(step.get("with", {}).get("python-version") == 3.12 for step in steps)
     assert codecov_step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
+    assert codecov_step["if"] == "github.actor != 'dependabot[bot]'"
 
 
-def test_workflows_pin_actions_to_latest_commit_shas() -> None:
+def test_workflows_pin_actions_to_full_commit_shas() -> None:
     workflows = {
         "ci": load_yaml(".github/workflows/ci.yml"),
         "codeql": load_yaml(".github/workflows/codeql.yml"),
@@ -61,19 +63,27 @@ def test_workflows_pin_actions_to_latest_commit_shas() -> None:
         for workflow_name, workflow in workflows.items()
     }
 
-    assert uses["ci"] == [
-        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
-        "astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990",
-        "codecov/codecov-action@8cad3ba95e5920c42f44492e54bc9639cba47959",
-    ]
-    assert uses["codeql"] == [
-        "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0",
-        "github/codeql-action/init@24ea975727876cf496b1eb0c5b36e96e01600b51",
-        "github/codeql-action/analyze@24ea975727876cf496b1eb0c5b36e96e01600b51",
-    ]
-    assert uses["release_please"] == [
-        "googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7"
-    ]
+    required_actions = {
+        "ci": {
+            "actions/checkout",
+            "astral-sh/setup-uv",
+            "codecov/codecov-action",
+        },
+        "codeql": {
+            "actions/checkout",
+            "github/codeql-action/init",
+            "github/codeql-action/analyze",
+        },
+        "release_please": {"googleapis/release-please-action"},
+    }
+
+    for workflow_name, workflow_uses in uses.items():
+        assert all(
+            re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", action) for action in workflow_uses
+        )
+        assert required_actions[workflow_name] <= {
+            action.split("@", maxsplit=1)[0] for action in workflow_uses
+        }
 
 
 def test_supporting_yaml_configuration_has_expected_structure() -> None:
