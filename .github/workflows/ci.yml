@@ -28,6 +28,7 @@ jobs:
         run: uv run ty check
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@8cad3ba95e5920c42f44492e54bc9639cba47959 # v6.0.2
+        if: github.actor != 'dependabot[bot]'
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: Rule-0-Softworks/gimp-weathered-photo-plugin
