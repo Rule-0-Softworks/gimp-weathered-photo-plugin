@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from uuid import uuid4
 
-from gimp_weathered_photo_plugin.metadata import write_recipe
+from gimp_weathered_photo_plugin.metadata import RenderRecord, write_recipe
 from gimp_weathered_photo_plugin.models import TreatmentRecipe
 
 
@@ -44,8 +47,11 @@ def process_batch(
     assets: Mapping[str, Path],
     recipe_factory: RecipeFactory,
     replay_recipe: TreatmentRecipe | None = None,
+    replay_record: RenderRecord | None = None,
     overwrite: bool = False,
 ) -> list[BatchResult]:
+    if replay_recipe is not None and replay_record is not None:
+        raise ValueError("choose either replay_recipe or replay_record")
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[BatchResult] = []
     for source in inputs:
@@ -62,9 +68,27 @@ def process_batch(
             )
             continue
         try:
-            recipe = replay_recipe or recipe_factory(source)
-            renderer.render(source, png, xcf, recipe, assets)
-            write_recipe(recipe_path, recipe, source)
+            if replay_record is not None:
+                source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+                if source_sha256 != replay_record.source_sha256:
+                    raise ValueError("replay source fingerprint mismatch")
+                recipe = replay_record.recipe
+            else:
+                recipe = replay_recipe or recipe_factory(source)
+            staging_directory = output_dir / ".vezor-staging" / str(uuid4())
+            staging_directory.mkdir(parents=True)
+            staged_png, staged_xcf, staged_recipe = _staged_output_paths(
+                staging_directory
+            )
+            try:
+                renderer.render(source, staged_png, staged_xcf, recipe, assets)
+                write_recipe(staged_recipe, recipe, source)
+                publish_output_set(
+                    (staged_png, staged_xcf, staged_recipe),
+                    (png, xcf, recipe_path),
+                )
+            finally:
+                shutil.rmtree(staging_directory, ignore_errors=True)
             results.append(BatchResult(source, png, xcf, recipe_path))
         except Exception as error:
             results.append(BatchResult(source, png, xcf, recipe_path, str(error)))
@@ -77,6 +101,14 @@ def _output_paths(source: Path, output_dir: Path) -> tuple[Path, Path, Path]:
         stem.with_suffix(".png"),
         stem.with_suffix(".xcf"),
         stem.with_suffix(".recipe.json"),
+    )
+
+
+def _staged_output_paths(directory: Path) -> tuple[Path, Path, Path]:
+    return (
+        directory / "output.png",
+        directory / "output.xcf",
+        directory / "output.recipe.json",
     )
 
 

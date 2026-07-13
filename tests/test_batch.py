@@ -1,8 +1,10 @@
+import hashlib
 from pathlib import Path
 
 import pytest
 
 from gimp_weathered_photo_plugin.batch import process_batch
+from gimp_weathered_photo_plugin.metadata import RenderRecord
 from tests.test_models import make_recipe
 
 
@@ -19,6 +21,14 @@ class FakeRenderer:
             raise RuntimeError("render failed")
         png.write_bytes(b"png")
         xcf.write_bytes(b"xcf")
+
+
+class WritingThenFailRenderer(FakeRenderer):
+    def render(
+        self, source: Path, png: Path, xcf: Path, recipe: object, assets: object
+    ) -> None:
+        png.write_bytes(b"partial-png")
+        raise RuntimeError("render failed")
 
 
 def test_batch_continues_after_one_failure_and_writes_three_outputs(
@@ -71,3 +81,54 @@ def test_publish_output_set_preserves_existing_outputs_when_a_staged_file_is_mis
     assert final_png.read_bytes() == b"old-png"
     assert final_xcf.read_bytes() == b"old-xcf"
     assert final_recipe.read_bytes() == b"old-recipe"
+
+
+def test_batch_preserves_existing_output_set_when_overwrite_render_fails(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(b"source")
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    final_png = output_dir / "print-worn.png"
+    final_xcf = output_dir / "print-worn.xcf"
+    final_recipe = output_dir / "print-worn.recipe.json"
+    final_png.write_bytes(b"old-png")
+    final_xcf.write_bytes(b"old-xcf")
+    final_recipe.write_bytes(b"old-recipe")
+
+    result = process_batch(
+        [source],
+        output_dir,
+        WritingThenFailRenderer(),
+        assets={"dry-rub-neutral-gray": Path("brush.gbr")},
+        recipe_factory=lambda _source: make_recipe(),
+        overwrite=True,
+    )
+
+    assert result[0].success is False
+    assert final_png.read_bytes() == b"old-png"
+    assert final_xcf.read_bytes() == b"old-xcf"
+    assert final_recipe.read_bytes() == b"old-recipe"
+
+
+def test_batch_replay_uses_saved_recipe_without_calling_recipe_factory(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "print.png"
+    source.write_bytes(b"source")
+    record = RenderRecord(
+        recipe=make_recipe(),
+        source_sha256=hashlib.sha256(b"source").hexdigest(),
+    )
+
+    result = process_batch(
+        [source],
+        tmp_path / "out",
+        FakeRenderer(),
+        assets={"dry-rub-neutral-gray": Path("brush.gbr")},
+        recipe_factory=lambda _source: (_ for _ in ()).throw(AssertionError("called")),
+        replay_record=record,
+    )
+
+    assert result[0].success is True
