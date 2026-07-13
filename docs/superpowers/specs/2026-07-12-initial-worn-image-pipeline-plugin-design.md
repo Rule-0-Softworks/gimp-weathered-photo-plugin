@@ -49,11 +49,12 @@ operation fails before creating outputs and identifies the missing component.
 
 Pure-Python modules own typed recipe data, asset resolution, protection-map
 calculation, stochastic planning, metadata serialization, and batch
-orchestration. They are testable in CI without importing `gi` or launching a
-desktop GIMP instance. A narrow `gimp_host` module is the only module that
-imports GIMP bindings. It contains both procedure registration and rendering,
-and turns a planned recipe into editable GIMP layers, masks, brushes,
-transforms, blend modes, local blur, PNG export, and XCF save.
+orchestration. They run on canonical Python 3.14 and are testable in CI without
+importing `gi` or launching a desktop GIMP instance. A narrow `gimp_host`
+module is the only module that imports GIMP bindings. It runs with GIMP's
+bundled Python 3.14 to register the procedure and render a resolved recipe into
+editable GIMP layers, masks, brushes, transforms, blend modes, local blur, PNG
+export, and XCF save.
 
 The default planner obtains fresh entropy from the operating system for every
 render. It records the resolved seed and every chosen asset and transform in
@@ -113,13 +114,14 @@ transforms, blend modes, and localized blur rather than an opaque global filter.
 A separately documented local smoke checklist covers GIMP 3 installation,
 plug-in discovery, one manual render, inspection of the XCF layers/masks,
 alpha comparison, and export verification. It also documents configuring the
-GIMP-host Python environment so it can import the locked official MediaPipe and
-OpenCV packages. Four, and only four, full-resolution approved Vezor images
+GIMP-host-compatible Python 3.14 environment. It explicitly prohibits
+modifying GIMP's externally managed Python installation. Four, and only four,
+full-resolution approved Vezor images
 are rendered for visual approval after all local gates pass.
 
 ## Constraints
 
-- Keep `requires-python = ">=3.12"`; Python 3.12 is canonical locally and in CI.
+- Keep `requires-python = ">=3.12"`; Python 3.14 is canonical locally and in CI.
 - Add only the approved direct production dependencies: `mediapipe` and
   `opencv-contrib-python`; commit the updated `uv.lock`.
 - Preserve existing automation configuration unless a concrete defect requires

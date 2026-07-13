@@ -15,7 +15,7 @@ jobs:
       - name: Set up uv and Python
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          python-version: 3.12
+          python-version: 3.14
       - name: Sync locked dependencies
         run: uv sync --locked
       - name: Run tests with coverage

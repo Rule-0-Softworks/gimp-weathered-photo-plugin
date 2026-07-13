@@ -4,14 +4,14 @@
 
 **Goal:** Deliver a GIMP 3-native, stochastic worn-print plug-in and batch workflow that preserves a source PNG's dimensions and ragged alpha silhouette while producing PNG, XCF, and recipe outputs.
 
-**Architecture:** Keep recipe planning, semantic protection analysis, asset resolution, and batch orchestration pure Python so they run in CI. Isolate every `gi.repository` call in one adapter that applies the resolved plan through native GIMP layers, masks, brushes, transforms, blend modes, and masked local blur.
+**Architecture:** Keep recipe planning, semantic protection analysis, asset resolution, and batch orchestration in canonical Python 3.14 so they run in CI. Isolate every `gi.repository` call in one GIMP-host module, which receives a resolved recipe and applies it through native layers, masks, brushes, transforms, blend modes, and masked local blur.
 
 **Tech Stack:** Python 3.12+, uv, pytest/pytest-cov, Ruff, ty, GIMP 3 Python API, official `mediapipe`, official `opencv-contrib-python`
 
 ## Global Constraints
 
 - Work only on `feature/initial-worn-image-pipeline-plugin`.
-- Keep `requires-python = ">=3.12"`; use Python 3.12 locally and in CI.
+- Keep `requires-python = ">=3.12"`; use Python 3.14 locally and in CI. Do not modify GIMP's externally managed Python installation.
 - Add only `mediapipe` and `opencv-contrib-python` as direct production dependencies; commit `uv.lock`. Never install another `cv2` wheel family.
 - Do not use Pillow, custom ONNX models, generative image editing, Canva effects, or a global filter.
 - GIMP must perform all visual treatment operations. Do not add text, frames, borders, full-frame overlays, global tint/blur, rings, rectangular masks, or burn blobs.
@@ -30,8 +30,8 @@
   named in the design spec.
 - `src/gimp_weathered_photo_plugin/assets.py`: curated asset manifest and
   preflight resolution.
-- `src/gimp_weathered_photo_plugin/protection.py`: MediaPipe/OpenCV protection
-  fields and candidate-overlap checks; no GIMP imports.
+- `src/gimp_weathered_photo_plugin/protection.py`: Python 3.14 MediaPipe/OpenCV
+  protection fields and candidate-overlap checks; no GIMP imports.
 - `src/gimp_weathered_photo_plugin/planning.py`: entropy, candidate sampling,
   rejection, and explicit recipe replay.
 - `src/gimp_weathered_photo_plugin/metadata.py`: recipe JSON schema and source
@@ -190,8 +190,8 @@
 - [ ] Run the contract tests and observe RED without importing `gi` in CI.
 - [ ] Implement `gimp_host.py` as the sole lazy `gi.repository` import module.
   It contains the GIMP 3 procedure registration and the protocol-backed
-  `GimpRenderer`. The procedure receives a parsed recipe, resolves package
-  assets, calls `apply_recipe`, saves XCF, and exports PNG. Use GIMP-native
+  `GimpRenderer`. The procedure receives a parsed recipe and assets, calls
+  `apply_recipe`, saves XCF, and exports PNG. Use GIMP-native
   layers, masks, brush resources, transforms, blend modes, and local Gaussian
   blur.
 - [ ] Run fake-adapter tests plus all static checks. Verify `rg -n
@@ -211,9 +211,9 @@
   MediaPipe/OpenCV availability check, batch invocation, alpha/dimension
   inspection, XCF layer/mask inspection, and four-proof limit.
 - [ ] Run the documentation test; observe RED.
-- [ ] Document Windows Store GIMP executable discovery, how to configure the
-  GIMP host Python to import the locked packages, noninteractive batch command,
-  failure diagnosis, and manual visual acceptance checklist. Update README
+- [ ] Document Windows Store GIMP executable discovery, the Python 3.14
+  environment setup that leaves GIMP's installation unchanged, noninteractive
+  batch command, failure diagnosis, and manual visual acceptance checklist. Update README
   from scaffold-only status to describe the planned plug-in without claiming
   native validation that has not occurred.
 - [ ] Run documentation test, formatter, lint, and type check; expect GREEN.

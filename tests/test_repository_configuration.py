@@ -41,7 +41,7 @@ def test_ci_pins_python_and_uploads_coverage() -> None:
         if str(step.get("uses", "")).startswith("codecov/codecov-action@")
     )
 
-    assert any(step.get("with", {}).get("python-version") == 3.12 for step in steps)
+    assert any(step.get("with", {}).get("python-version") == 3.14 for step in steps)
     assert codecov_step["with"]["token"] == "${{ secrets.CODECOV_TOKEN }}"
 
 
