@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: 3.12
+      - name: Sync locked dependencies
+        run: uv sync --locked
+      - name: Run tests with coverage
+        run: uv run pytest --cov --cov-branch --cov-report=xml
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run ty check
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@8cad3ba95e5920c42f44492e54bc9639cba47959 # v6.0.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: Rule-0-Softworks/gimp-weathered-photo-plugin
+          files: coverage.xml
+          fail_ci_if_error: true
