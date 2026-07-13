@@ -99,10 +99,8 @@
   exceed permitted soft-exclusion overlap.
 - [ ] Run focused tests and observe collection/import failures.
 - [ ] Add `assets/worn-print-manifest.json` with the exact IDs/relative paths
-  from the design spec, declare its six original GIMP-authored grayscale asset
-  files as package data, and create the two broken dry-rub brushes, one
-  restrained mottled brush, and three non-circular water-stain masks with
-  GIMP. Implement preflight, `secrets.randbits(128)`
+  from the design spec and declare its six original GIMP-authored grayscale
+  asset files as package data. Implement preflight, `secrets.randbits(128)`
   default entropy, bounded random scale/rotation/opacity/density/direction,
   weighted rejection sampling, and a hard maximum mark count. Do not inspect
   filenames for entropy.
@@ -220,9 +218,11 @@
   native validation that has not occurred.
 - [ ] Run documentation test, formatter, lint, and type check; expect GREEN.
 - [ ] With a usable GIMP batch executable and four approved Vezor input PNGs,
-  execute the checklist and create exactly four full-size PNG/XCF/recipe proof
-  sets. Stop for visual approval. If either prerequisite is absent, record the
-  exact blocker and do not fabricate proofs.
+  first create and verify the two broken dry-rub brushes, one restrained
+  mottled brush, and three non-circular water-stain masks declared by the
+  manifest. Then execute the checklist and create exactly four full-size
+  PNG/XCF/recipe proof sets. Stop for visual approval. If either prerequisite
+  is absent, record the exact blocker and do not fabricate assets or proofs.
 - [ ] Inspect staged diff and commit `docs: add gimp worn print smoke test`.
 
 ### Task 7: Run the complete local gate and review scope
