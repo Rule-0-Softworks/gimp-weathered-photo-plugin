@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: 3.14
       - name: Install MediaPipe system libraries
-        run: sudo apt-get update && sudo apt-get install -y libgles2
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgles2
       - name: Sync locked dependencies
         run: uv sync --locked
       - name: Run tests with coverage
