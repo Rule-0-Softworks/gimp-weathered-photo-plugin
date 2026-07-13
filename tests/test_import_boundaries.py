@@ -1,6 +1,7 @@
 import importlib
 import importlib.metadata
 import sys
+from pathlib import Path
 
 
 def test_gimp_host_import_requires_neither_gi_nor_analyzer_packages(
@@ -34,3 +35,12 @@ def test_package_can_load_inside_gimp_without_installed_distribution(
 
     sys.modules.pop("gimp_weathered_photo_plugin", None)
     importlib.import_module("gimp_weathered_photo_plugin")
+
+
+def test_only_tasks_landmarks_imports_mediapipe() -> None:
+    assert "mediapipe" not in Path(
+        "src/gimp_weathered_photo_plugin/protection.py"
+    ).read_text(encoding="utf-8")
+    assert "from mediapipe.tasks.python import vision" in Path(
+        "src/gimp_weathered_photo_plugin/tasks_landmarks.py"
+    ).read_text(encoding="utf-8")

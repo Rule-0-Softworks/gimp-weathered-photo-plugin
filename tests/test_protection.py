@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from gimp_weathered_photo_plugin.models import Mark, Point
 from gimp_weathered_photo_plugin.protection import (
@@ -53,6 +54,15 @@ def test_face_candidate_has_more_overlap_than_an_edge_candidate() -> None:
     edge_mark = make_mark(Point(x=0.0, y=0.1))
 
     assert overlap_fraction(face_mark, regions) > overlap_fraction(edge_mark, regions)
+
+
+def test_protection_requires_injected_landmark_detectors() -> None:
+    image = np.zeros((3, 3, 3), dtype=np.uint8)
+
+    with pytest.raises(
+        ValueError, match="face_detector and hand_detector are required"
+    ):
+        build_protection_regions(image)
 
 
 def make_mark(anchor: Point) -> Mark:
