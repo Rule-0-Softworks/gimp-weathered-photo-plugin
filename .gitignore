@@ -206,6 +206,7 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 .ty/
+.codex/full-feature-tdd/
 
 # Editor and operating-system metadata
 .vscode/
