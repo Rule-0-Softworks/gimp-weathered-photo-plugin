@@ -56,11 +56,12 @@ def test_console_bridge_uses_argument_list_and_absolute_request_paths(
         return CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr("subprocess.run", fake_run)
-    bridge = GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe"))
+    executable = tmp_path / "gimp-console"
+    bridge = GimpConsoleBridge(executable)
 
     bridge.render(source, png, xcf, make_recipe(), _assets(tmp_path))
 
-    assert calls[0][0][0] == "C:\\GIMP\\bin\\gimp-console.exe"
+    assert calls[0][0][0] == str(executable)
     assert calls[0][1]["shell"] is False
 
 
@@ -92,7 +93,7 @@ def test_console_bridge_cleans_a_per_run_configuration_under_project_temp(
     monkeypatch.setattr(bridge_module, "_TEMP_ROOT", root)
     monkeypatch.setattr("subprocess.run", fake_run)
 
-    GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe")).render(
+    GimpConsoleBridge(tmp_path / "gimp-console").render(
         source, png, xcf, make_recipe(), _assets(tmp_path)
     )
 
@@ -128,7 +129,7 @@ def test_console_bridge_cleans_temporary_configuration_after_a_failed_job(
     monkeypatch.setattr("subprocess.run", fake_run)
 
     with pytest.raises(GimpConsoleError):
-        GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe")).render(
+        GimpConsoleBridge(tmp_path / "gimp-console").render(
             source,
             tmp_path / "result.png",
             tmp_path / "result.xcf",
@@ -159,7 +160,7 @@ def test_console_bridge_fails_when_gimp_or_expected_outputs_fail(
         return CompletedProcess(command, returncode, "", "failed")
 
     monkeypatch.setattr("subprocess.run", fake_run)
-    bridge = GimpConsoleBridge(Path("C:/GIMP/bin/gimp-console.exe"))
+    bridge = GimpConsoleBridge(tmp_path / "gimp-console")
 
     with pytest.raises(GimpConsoleError):
         bridge.render(source, png, xcf, make_recipe(), _assets(tmp_path))

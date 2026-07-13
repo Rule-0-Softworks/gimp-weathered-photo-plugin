@@ -80,10 +80,11 @@ def test_bridge_uses_argument_list_and_validates_fingerprint(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    response = SemanticAnalysisBridge(Path("C:/tools/analyzer.exe")).analyze(request)
+    executable = tmp_path / "analyzer"
+    response = SemanticAnalysisBridge(executable).analyze(request)
 
     assert response.source_sha256 == request.source_sha256
-    assert captured["args"] == ([str(Path("C:/tools/analyzer.exe"))],)
+    assert captured["args"] == ([str(executable)],)
     assert captured["kwargs"] == {
         "input": json.dumps(request.to_dict()),
         "text": True,
@@ -113,7 +114,7 @@ def test_bridge_rejects_timeout_and_mismatched_response_fingerprint(
         raise subprocess.TimeoutExpired(["fake-analyzer"], 120)
 
     monkeypatch.setattr(subprocess, "run", timed_out)
-    bridge = SemanticAnalysisBridge(Path("C:/tools/analyzer.exe"))
+    bridge = SemanticAnalysisBridge(tmp_path / "analyzer")
     with pytest.raises(BridgeExecutionError, match="timed out"):
         bridge.analyze(request)
 

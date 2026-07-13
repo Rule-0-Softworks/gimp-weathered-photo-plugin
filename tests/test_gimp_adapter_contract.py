@@ -80,19 +80,20 @@ def test_apply_recipe_delivers_all_exclusions_before_editable_treatments() -> No
     ]
 
 
-def test_interactive_source_requires_an_unmodified_filesystem_backed_png() -> None:
+def test_interactive_source_requires_an_unmodified_filesystem_backed_png(
+    tmp_path: Path,
+) -> None:
     from gimp_weathered_photo_plugin.gimp_host import validate_interactive_source
 
-    assert validate_interactive_source(Path("C:/photos/print.png"), False) == Path(
-        "C:/photos/print.png"
-    )
+    source = tmp_path / "print.png"
+    assert validate_interactive_source(source, False) == source
 
     with pytest.raises(ValueError, match="saved PNG"):
         validate_interactive_source(None, False)
     with pytest.raises(ValueError, match="PNG"):
-        validate_interactive_source(Path("C:/photos/print.jpg"), False)
+        validate_interactive_source(tmp_path / "print.jpg", False)
     with pytest.raises(ValueError, match="unmodified"):
-        validate_interactive_source(Path("C:/photos/print.png"), True)
+        validate_interactive_source(source, True)
 
 
 def test_native_water_stain_transforms_density_scales_and_anchors_its_mask_asset() -> (
@@ -512,7 +513,9 @@ def test_native_brush_mark_converts_rotation_degrees_to_radians() -> None:
     assert calls == [("rotate", (math.radians(mark.rotation_degrees), True, 0.0, 0.0))]
 
 
-def test_interactive_request_parses_a_recipe_and_absolute_asset_map() -> None:
+def test_interactive_request_parses_a_recipe_and_absolute_asset_map(
+    tmp_path: Path,
+) -> None:
     import json
 
     from gimp_weathered_photo_plugin.gimp_host import parse_interactive_request
@@ -523,11 +526,11 @@ def test_interactive_request_parses_a_recipe_and_absolute_asset_map() -> None:
         json.dumps(recipe.to_dict()),
         json.dumps(
             {
-                "dry-rub-neutral-gray": "C:/assets/dry.gbr",
-                "water-stain-01": "C:/assets/water.png",
+                "dry-rub-neutral-gray": str(tmp_path / "dry.gbr"),
+                "water-stain-01": str(tmp_path / "water.png"),
             }
         ),
     )
 
     assert parsed_recipe == recipe
-    assert assets["water-stain-01"] == Path("C:/assets/water.png")
+    assert assets["water-stain-01"] == tmp_path / "water.png"

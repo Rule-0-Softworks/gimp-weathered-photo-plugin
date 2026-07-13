@@ -32,19 +32,20 @@ def _response_payload(
     }
 
 
-def test_request_serializes_immutable_input_identity() -> None:
+def test_request_serializes_immutable_input_identity(tmp_path: Path) -> None:
     from gimp_weathered_photo_plugin.bridge_protocol import AnalysisRequest
 
+    source_path = (tmp_path / "staging" / "job" / "source.png").resolve()
     request = AnalysisRequest(
         bridge_schema_version=2,
-        source_path=Path("C:/staging/job/source.png"),
+        source_path=source_path,
         source_sha256="a" * 64,
         source_size=Size(width=1600, height=1200),
     )
 
     assert request.to_dict() == {
         "bridge_schema_version": 2,
-        "source_path": "C:/staging/job/source.png",
+        "source_path": source_path.as_posix(),
         "source_sha256": "a" * 64,
         "source_size": {"width": 1600, "height": 1200},
     }
