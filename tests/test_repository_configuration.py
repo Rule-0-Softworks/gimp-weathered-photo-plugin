@@ -105,4 +105,4 @@ def test_release_please_json_uses_python_manifest_mode() -> None:
     manifest = load_json(".release-please-manifest.json")
 
     assert config["packages"]["."]["release-type"] == "python"
-    assert manifest == {".": "0.0.0"}
+    assert manifest == {".": "0.1.0"}
