@@ -123,8 +123,22 @@ def _parse_adapter_configuration(value: object) -> dict[str, str]:
             or not key
             or not isinstance(entry, str)
             or not entry
-            or len(key.encode("utf-8")) > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
-            or len(entry.encode("utf-8")) > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
+        ):
+            raise BridgeProtocolError(
+                "adapter_configuration keys and values must be non-empty strings "
+                "of at most 256 UTF-8 bytes"
+            )
+        try:
+            key_length = len(key.encode("utf-8"))
+            entry_length = len(entry.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise BridgeProtocolError(
+                "adapter_configuration keys and values must be non-empty strings "
+                "of at most 256 UTF-8 bytes"
+            ) from error
+        if (
+            key_length > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
+            or entry_length > MAX_ADAPTER_CONFIGURATION_STRING_BYTES
         ):
             raise BridgeProtocolError(
                 "adapter_configuration keys and values must be non-empty strings "

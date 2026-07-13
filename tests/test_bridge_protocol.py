@@ -98,6 +98,24 @@ def test_response_rejects_non_string_adapter_configuration_values() -> None:
         parse_response_json(json.dumps(payload))
 
 
+def test_response_rejects_adapter_configuration_lone_surrogate() -> None:
+    from gimp_weathered_photo_plugin.bridge_protocol import (
+        BridgeProtocolError,
+        parse_response_json,
+    )
+
+    document = (
+        '{"bridge_schema_version":2,"source_sha256":"'
+        + "a" * 64
+        + '","detectors":{"face":"no_detection","hand":"no_detection",'
+        '"saliency":"detected"},"adapter_configuration":{"model":"\\ud800"},'
+        '"exclusions":[]}'
+    )
+
+    with pytest.raises(BridgeProtocolError, match="adapter_configuration"):
+        parse_response_json(document)
+
+
 @pytest.mark.parametrize(
     "document",
     [

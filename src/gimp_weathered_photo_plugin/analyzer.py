@@ -202,7 +202,10 @@ def _write_response(response: AnalysisResponse) -> None:
 
 
 def _analyzer_error_exit_code(error: AnalyzerError) -> int:
-    if isinstance(error.__cause__, (ModelAssetError, ModelSecurityError)):
+    if isinstance(
+        error.__cause__,
+        (ModelAssetError, ModelSecurityError, ProtectionDependencyError),
+    ):
         return 3
     message = str(error).lower()
     if (

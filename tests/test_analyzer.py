@@ -165,6 +165,36 @@ def test_analyzer_module_rejects_non_utf8_input_with_exit_code_two() -> None:
     assert b"UTF-8" in completed.stderr
 
 
+def test_analyzer_module_returns_dependency_code_for_tasks_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import gimp_weathered_photo_plugin.analyzer as analyzer
+    from gimp_weathered_photo_plugin.protection import ProtectionDependencyError
+
+    class DependencyFailureAdapter:
+        def analyze(self, source: Path) -> AnalyzerResult:
+            try:
+                raise ProtectionDependencyError(
+                    "MediaPipe Tasks provider is unavailable"
+                )
+            except ProtectionDependencyError as error:
+                raise analyzer.AnalyzerError(str(error)) from error
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"source")
+    stdin = io.TextIOWrapper(
+        io.BytesIO(json.dumps(_request(source).to_dict()).encode("utf-8")),
+        encoding="utf-8",
+    )
+    stderr = io.StringIO()
+    monkeypatch.setattr(analyzer, "MediaPipeOpenCvAdapter", DependencyFailureAdapter)
+    monkeypatch.setattr(analyzer.sys, "stdin", stdin)
+    monkeypatch.setattr(analyzer.sys, "stderr", stderr)
+
+    assert analyzer.main() == 3
+    assert "MediaPipe Tasks provider is unavailable" in stderr.getvalue()
+
+
 def test_analyzer_module_writes_one_response_for_a_valid_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
