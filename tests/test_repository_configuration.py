@@ -1,5 +1,6 @@
 import json
 import re
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +116,7 @@ def test_codecov_coverage_status_policy_allows_small_project_regressions() -> No
 def test_release_please_json_uses_python_manifest_mode() -> None:
     config = load_json("release-please-config.json")
     manifest = load_json(".release-please-manifest.json")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert config["packages"]["."]["release-type"] == "python"
-    assert manifest == {".": "0.1.0"}
+    assert manifest == {".": project["project"]["version"]}
