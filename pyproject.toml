@@ -28,7 +28,7 @@ dev = [
   "pytest-cov>=6,<8",
   "pyyaml>=6,<7",
   "ruff>=0.15.22,<1",
-  "ty>=0.0.1a20,<1",
+  "ty>=0.0.61,<1",
 ]
 
 [tool.pytest.ini_options]
