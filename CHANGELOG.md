@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/Rule-0-Softworks/gimp-weathered-photo-plugin/compare/gimp-weathered-photo-plugin-v0.2.0...gimp-weathered-photo-plugin-v0.2.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* **ci:** exclude planning markdown from ruff formatting ([147bb04](https://github.com/Rule-0-Softworks/gimp-weathered-photo-plugin/commit/147bb0483b89d82d9710a5ef13cb0fa497487c1c))
+* **ci:** support Ruff 0.16 Markdown formatting ([b05d565](https://github.com/Rule-0-Softworks/gimp-weathered-photo-plugin/commit/b05d565aab5dd539e81d8a44c7d9a725bd788499))
+
 ## [0.2.0](https://github.com/Rule-0-Softworks/gimp-weathered-photo-plugin/compare/gimp-weathered-photo-plugin-v0.1.0...gimp-weathered-photo-plugin-v0.2.0) (2026-07-13)
 
 
