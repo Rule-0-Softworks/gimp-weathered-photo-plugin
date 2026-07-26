@@ -50,5 +50,8 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.format]
+exclude = ["docs/superpowers/plans/**"]
+
 [tool.ty.environment]
 python-version = "3.14"
